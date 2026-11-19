@@ -8,7 +8,8 @@
     "test": "node tests/run-tests.js",
     "test:ui": "node tests/ui-check.mjs",
     "leakguard": "node scripts/leakguard.mjs",
-    "hooks": "git config core.hooksPath .githooks",
+    "leakguard:ci": "node scripts/leakguard.mjs --ci",
+    "setup-hooks": "git config core.hooksPath .githooks && node scripts/leakguard.mjs",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

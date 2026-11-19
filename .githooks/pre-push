@@ -1,5 +1,5 @@
 #!/bin/sh
-# LeakGuard before every push. Enable once per clone: npm run hooks  (git config core.hooksPath .githooks)
+# LeakGuard before every push. Enable once per clone: npm run setup-hooks  (git config core.hooksPath .githooks)
 # Checks the commits being pushed (messages + added lines) and every tracked file.
 while read local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue

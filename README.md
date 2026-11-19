@@ -32,12 +32,13 @@ The Worker `gradecalc` serves `site/` as static assets and runs only for `/api/*
 `gradecalc`. `wrangler.jsonc` sets the custom domain only (`workers_dev` and preview URLs off).
 
 1. **Workers Builds:** Cloudflare dashboard → Workers & Pages → Create → *Import a repository* → `UWinAidan/GradeCalc`.
-   Worker name `gradecalc`, production branch `main`, build command *(empty)*, deploy command `npx wrangler deploy`.
+   Worker name `gradecalc`, production branch `main`, build command `node scripts/leakguard.mjs --ci`, deploy command
+   `npx wrangler deploy`. A LeakGuard failure stops the deploy.
    Every push to `main` deploys. The first deploy creates the `gradecalc.aidanwbrown.com` custom domain.
 2. **Database schema** (from Round 5 on): `npx wrangler d1 migrations apply gradecalc --remote`.
 3. **Secrets** (from Round 5 on, never in git): `npx wrangler secret put <NAME>` for each value in `.dev.vars.example`.
 
 ## Contributing / development
-See `CLAUDE.md` (layout, commands, rules). Before pushing, run `npm run hooks` once so the LeakGuard pre-push check runs.
+See `CLAUDE.md` (layout, commands, rules). Before pushing, run `npm run setup-hooks` once so the LeakGuard pre-push check runs.
 
 Made by [Aidan Brown](https://aidanwbrown.com).

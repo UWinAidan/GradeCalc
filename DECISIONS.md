@@ -44,3 +44,7 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
 - **LeakGuard reads real-data fingerprints at run time** from the local `../Gradebook` checkout (course codes, its D1 id)
   and an untracked `.leakguard.local.txt`. The list of what must not leak can't itself be committed to a public repo.
   It also scans the added lines of every commit being pushed, so data that was committed and then deleted is still caught.
+- **LeakGuard fails closed** (Aidan, 2026-11-18): no `../Gradebook/program/program.json` (or `LEAKGUARD_GRADEBOOK`) →
+  exit 2, push blocked. `.leakguard.local.txt` stays optional (extra strings); the Gradebook checkout is the required source.
+  `--ci` is the Workers Builds build command, so every deploy is checked even from a machine without the private
+  checkout: it skips only the personal fingerprints and commit-history scan.

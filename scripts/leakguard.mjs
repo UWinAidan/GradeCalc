@@ -7,9 +7,16 @@
  *   4. real data: fingerprints of Aidan's private Gradebook (its course codes and IDs), read at RUN TIME from the local
  *      Gradebook checkout and from the untracked .leakguard.local.txt — the fingerprint list itself is never committed,
  *   5. unsafe deploy config (workers_dev / preview_urls on, extra routes).
- * Options: --staged (also scan the staged versions), --range <a..b> (commit messages + diffs of that range). */
+ * Fails CLOSED: without the fingerprint source (../Gradebook/program/program.json, or LEAKGUARD_GRADEBOOK) it exits 2,
+ * because a "pass" that never compared against the real data would mean nothing.
+ * Options:
+ *   --staged       also scan the staged versions of changed files
+ *   --range <a..b> commit messages + added lines of that range (the pre-push hook passes the pushed range)
+ *   --ci           Workers Builds build command (no private checkout there): skips the personal fingerprints and the
+ *                  commit-history scan; still checks files, secrets, tokens, trackers, third-party URLs and deploy config.
+ * Exit codes: 0 pass, 1 leak found, 2 cannot check (fingerprint source missing). */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,13 +24,25 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 << 20 });
 const args = process.argv.slice(2);
 const range = args.includes('--range') ? args[args.indexOf('--range') + 1] : null;
+const CI = args.includes('--ci');
 
 const problems = [];
 const warnings = [];
 const fail = (what, where) => problems.push(`${what}${where ? `  [${where}]` : ''}`);
 
 // ---------- 1. forbidden files ----------
-const files = git('ls-files', '-z').split('\0').filter(Boolean);
+function walk(dir, rel = '') {  // CI fallback if git metadata is unavailable
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (['.git', 'node_modules', '.wrangler'].includes(e.name)) continue;
+    const r = rel ? `${rel}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...walk(path.join(dir, e.name), r)); else out.push(r);
+  }
+  return out;
+}
+let files;
+try { files = git('ls-files', '-z').split('\0').filter(Boolean); }
+catch (e) { if (!CI) throw e; files = walk(ROOT); warnings.push('git unavailable: scanned the working tree instead'); }
 const FORBIDDEN = [
   [/\.(xlsx|xlsm|xls|csv|pdf|sqlite3?|db)$/i, 'spreadsheet / CSV / PDF / database file'],
   [/(^|\/)~\$/, 'Office lock file'],
@@ -64,18 +83,24 @@ const ALLOWED_HOSTS = new Set([
 const fingerprints = new Set();
 const GRADEBOOK = process.env.LEAKGUARD_GRADEBOOK || path.resolve(ROOT, '../Gradebook');
 const programPath = path.join(GRADEBOOK, 'program/program.json');
-if (existsSync(programPath)) {
+if (CI) {
+  warnings.push('--ci: personal fingerprints and commit history skipped (no private checkout here); the pre-push hook checks them');
+} else if (!existsSync(programPath)) {
+  console.log(`LeakGuard ERROR: fingerprint source not found: ${programPath}`);
+  console.log('Clone UWinAidan/Gradebook next to this repo or set LEAKGUARD_GRADEBOOK to its folder. (--ci is for Workers Builds only.)');
+  console.log('LeakGuard could not check for real data: do not push.');
+  process.exit(2);
+} else {
   const raw = readFileSync(programPath, 'utf8');
   for (const m of raw.matchAll(/\b[A-Z]{3,4}[- ]?\d{4}\b/g)) {
     fingerprints.add(m[0]); fingerprints.add(m[0].replace(/[- ]/, '')); fingerprints.add(m[0].replace(/[- ]/, '-')); fingerprints.add(m[0].replace(/[- ]/, ' '));
   }
-} else warnings.push(`no Gradebook checkout at ${GRADEBOOK}: course-code fingerprints not checked (set LEAKGUARD_GRADEBOOK)`);
-for (const conf of ['wrangler.jsonc']) {  // the private Gradebook's resource IDs
-  const p = path.join(GRADEBOOK, conf);
+  if (fingerprints.size === 0) { console.log(`LeakGuard ERROR: no course codes found in ${programPath}: do not push.`); process.exit(2); }
+  const p = path.join(GRADEBOOK, 'wrangler.jsonc');  // the private Gradebook's resource IDs
   if (existsSync(p)) for (const m of readFileSync(p, 'utf8').matchAll(/"(database_id|ACCESS_AUD)"\s*:\s*"([^"]{16,})"/g)) fingerprints.add(m[2]);
 }
 const localList = path.join(ROOT, '.leakguard.local.txt');
-if (existsSync(localList)) {
+if (CI) { /* the personal list lives only on Aidan's machine */ } else if (existsSync(localList)) {
   for (const line of readFileSync(localList, 'utf8').split(/\r?\n/)) { const s = line.trim(); if (s && !s.startsWith('#')) fingerprints.add(s); }
 } else warnings.push('no .leakguard.local.txt (optional: one private string per line, e.g. names or exact marks to never commit)');
 const fpList = [...fingerprints].filter((s) => s.length >= 4);
@@ -114,8 +139,8 @@ if (args.includes('--staged')) {
 }
 
 // Commits about to be pushed: messages and every added line (catches data that was committed and then removed again).
-const pushRange = range || (() => { try { git('rev-parse', '--verify', '@{u}'); return '@{u}..HEAD'; } catch { return 'HEAD'; } })();
-try {
+const pushRange = CI ? null : range || (() => { try { git('rev-parse', '--verify', '@{u}'); return '@{u}..HEAD'; } catch { return 'HEAD'; } })();
+if (!CI) try {
   const log = git('log', '--format=%H%n%B', pushRange);
   scanText(log, `commit messages ${pushRange}`);
   const added = git('log', '-p', '--format=', pushRange, '--', '.', `:!${SELF}`, ':!site/vendor/')
@@ -133,7 +158,8 @@ if (!/"database_name"\s*:\s*"gradecalc"/.test(wr)) fail('wrangler.jsonc: D1 must
 
 // ---------- report ----------
 for (const w of warnings) console.log('WARN  ' + w);
-console.log(`LeakGuard: ${files.length} tracked files, ${fpList.length} real-data fingerprints, range ${pushRange}`);
+console.log(CI ? `LeakGuard --ci: ${files.length} files (personal fingerprints skipped)`
+  : `LeakGuard: ${files.length} tracked files, ${fpList.length} real-data fingerprints, range ${pushRange}`);
 if (problems.length) {
   for (const p of problems) console.log('FAIL  ' + p);
   console.log(`LeakGuard FAILED (${problems.length}). Do not push.`);

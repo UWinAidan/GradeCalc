@@ -21,10 +21,20 @@ its D1 database. GradeCalc starts completely blank. **The GitHub repo is public.
 - `node tests/run-tests.js` — must stay all-pass.
 - `node tests/ui-check.mjs` — Playwright check of every page (desktop + 360 px, both themes, no console/CSP errors, no
   outside requests). Must stay all-pass.
-- `node scripts/leakguard.mjs` — must PASS before every push.
+- `node scripts/leakguard.mjs` — must PASS before every push. Exit 0 pass, 1 leak, 2 can't check (fails closed: needs
+  `../Gradebook/program/program.json`, or `LEAKGUARD_GRADEBOOK=<path to Gradebook>`). `--ci` is the Workers Builds build
+  command: skips personal fingerprints and history, still checks files, secrets, tokens, trackers, URLs, deploy config.
 - `npm run dev` — the Worker locally (`.dev.vars` from `.dev.vars.example`).
 - `npx wrangler d1 migrations apply gradecalc --remote` — schema changes.
-- Deploy = commit + push to `main`; Cloudflare Workers Builds runs `npx wrangler deploy`.
+- Deploy = commit + push to `main`; Cloudflare Workers Builds runs the build command `node scripts/leakguard.mjs --ci`,
+  then `npx wrangler deploy` (a LeakGuard failure stops the deploy).
+
+## Fresh clone (do once)
+1. Clone `UWinAidan/Gradebook` next to this repo (`../Gradebook`) so LeakGuard has its fingerprints (or set
+   `LEAKGUARD_GRADEBOOK`). Optional: `.leakguard.local.txt` (untracked) with extra private strings, one per line.
+2. `npm install`
+3. `npm run setup-hooks` — sets `core.hooksPath` to `.githooks` (pre-push runs LeakGuard on the pushed range) and runs
+   LeakGuard once to prove it works. Check with `git config core.hooksPath` → `.githooks`.
 
 ## Rules
 - **No real data, ever.** Demo data, tests and docs use made-up students, marks and course codes (`DEMO-1010` style).
