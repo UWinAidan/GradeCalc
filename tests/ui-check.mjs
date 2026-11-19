@@ -14,7 +14,7 @@ if (!browser) { console.error('No Edge/Chrome found for Playwright.'); process.e
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? '  ' + detail : '')); };
 
-const PAGES = ['/', '/about.html', '/privacy.html'];
+const PAGES = ['/', '/about', '/privacy'];
 const SIZES = [['desktop', 1366, 768], ['phone 360', 360, 740]];
 
 for (const theme of ['dark', 'light']) {
@@ -32,7 +32,7 @@ for (const theme of ['dark', 'light']) {
       check(`${tag}: theme follows system`, (await page.getAttribute('html', 'data-theme')) === theme);
       check(`${tag}: header + nav`, await page.isVisible('header.top a.home') && (await page.$$('header.top nav a')).length === 3);
       check(`${tag}: footer disclaimer`, (await page.textContent('footer.site')).includes('Not affiliated with or endorsed by the University of Windsor.'));
-      check(`${tag}: footer links About + Privacy`, await page.isVisible('footer.site a[href="/about.html"]') && await page.isVisible('footer.site a[href="/privacy.html"]'));
+      check(`${tag}: footer links About + Privacy`, await page.isVisible('footer.site a[href="/about"]') && await page.isVisible('footer.site a[href="/privacy"]'));
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       check(`${tag}: no sideways scroll`, overflow <= 0, `overflow ${overflow}px`);
     }
@@ -45,7 +45,7 @@ for (const theme of ['dark', 'light']) {
 // Theme toggle persists; About page links and copy button.
 const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'dark', permissions: ['clipboard-read', 'clipboard-write'] });
 const page = await ctx.newPage();
-await page.goto(BASE + '/about.html');
+await page.goto(BASE + '/about');
 await page.click('#theme-btn');
 check('theme toggle → light', (await page.getAttribute('html', 'data-theme')) === 'light');
 await page.reload();

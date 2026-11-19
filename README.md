@@ -12,7 +12,7 @@ of Windsor.*
 ## Privacy in one paragraph
 Without an account, your grades never leave your browser. With an account, your gradebook is stored in a Cloudflare D1
 database and only you can see it. No passwords are stored (sign-in is via Google/Microsoft), and there are no ads,
-trackers or analytics. You can download or delete everything at any time. Details: [Privacy](https://gradecalc.aidanwbrown.com/privacy.html).
+trackers or analytics. You can download or delete everything at any time. Details: [Privacy](https://gradecalc.aidanwbrown.com/privacy).
 
 ## Run it yourself
 Requirements: Node 20+.

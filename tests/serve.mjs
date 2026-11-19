@@ -27,6 +27,7 @@ export function serve({ port = 0, api = null } = {}) {
     if (api && (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/'))) return api(req, res);
     let p = decodeURIComponent(url.pathname);
     if (p.endsWith('/')) p += 'index.html';
+    else if (!path.extname(p)) p += '.html';  // Cloudflare assets serve /about from about.html
     const file = path.join(SITE, path.normalize(p));
     if (!file.startsWith(SITE) || p.includes('_headers')) { res.writeHead(404); return res.end(); }
     try {
