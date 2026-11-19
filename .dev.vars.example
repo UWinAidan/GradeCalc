@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `npm run dev` (ignored by git). In production these are `npx wrangler secret put <NAME>`.
+# Filled in from Round 5 (accounts).
+SESSION_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=

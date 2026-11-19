@@ -1,0 +1,30 @@
+# Nobody's grades go in git: user data lives in D1 (accounts) or the user's own browser (guest mode).
+# Spreadsheets/exports are blocked by extension; test fixtures are made up and generated in code.
+*.xlsx
+*.xlsm
+*.xls
+~$*
+*.csv
+*.pdf
+seed*.sql
+seed*.json
+exports/
+private/
+*.sqlite
+*.sqlite3
+gradecalc-backup*.json
+
+# LeakGuard's local fingerprint list (strings that must never appear in the repo) — never committed
+.leakguard.local.txt
+
+# Secrets
+.dev.vars
+.env
+.env.*
+
+node_modules/
+.wrangler/
+test-results/
+*.log
+.DS_Store
+__pycache__/

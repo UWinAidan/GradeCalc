@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy · GradeCalc</title>
+<meta name="description" content="What GradeCalc stores, where, and who can see it.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/css/app.css">
+<script src="/js/theme.js"></script>
+<script type="module" src="/js/site.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="home" href="/"><img src="/favicon.svg" alt="">GradeCalc</a>
+  <span class="tag">Free grade calculator</span>
+  <nav aria-label="Site">
+    <a href="/">Home</a>
+    <a href="/about.html">About</a>
+    <a href="/privacy.html" aria-current="page">Privacy</a>
+    <button class="btn small" id="theme-btn" type="button" aria-label="Switch light / dark theme">◐ Theme</button>
+  </nav>
+</header>
+<main class="prose">
+  <h1>Privacy</h1>
+  <p class="muted">Last updated 2026-11-18.</p>
+  <div class="note" id="privacy-status">GradeCalc isn't open yet. This page currently stores nothing about you and sets no cookies.
+    The only thing kept is your light/dark theme choice, saved in your own browser.</div>
+
+  <h2>How it will work</h2>
+  <ul>
+    <li><b>Without an account (guest mode):</b> your grades stay in your own browser (localStorage). Nothing is sent anywhere.</li>
+    <li><b>With an account (optional):</b> you sign in with Google or Microsoft. GradeCalc never sees or stores a password.
+      Before anything is saved to the cloud, you'll see a consent screen explaining what is stored.</li>
+    <li><b>What is stored for an account:</b> your sign-in provider and its account ID, your email and name as the provider reports them,
+      your gradebook, and when you accepted the consent screen.</li>
+    <li><b>Where:</b> Cloudflare (Workers and the D1 database).</li>
+    <li><b>Who can see your grades:</b> only you. The site owner's admin view shows only the number of users and total storage used, never anyone's grades.</li>
+    <li><b>Your control:</b> download your data (JSON or Excel) or delete your account and all its data at any time from the Account page.</li>
+    <li><b>No ads, no trackers, no analytics, no third-party scripts.</b></li>
+  </ul>
+  <p>Questions: <a href="mailto:contact@aidanwbrown.com">contact@aidanwbrown.com</a></p>
+</main>
+<footer class="site">
+  <div class="links"><span>© 2026 Aidan Brown</span><a href="https://aidanwbrown.com" target="_blank" rel="noopener">aidanwbrown.com</a><a href="/about.html">About</a><a href="/privacy.html">Privacy</a></div>
+  <div class="disclaimer">Not affiliated with or endorsed by the University of Windsor.</div>
+</footer>
+</body>
+</html>
