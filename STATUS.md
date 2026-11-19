@@ -12,15 +12,15 @@
 | Guest app (2) · Edit structure (3) · Files (4) · Accounts (5) · Guide + PWA (6) | ⏳ |
 
 ## Session handoff (ContextKeeper)
-Updated: 2026-11-18 22:19 · branch `main` · latest commit (see `git log -1`; LeakGuard hardening pushed) · Round 1 committed + pushed
+Updated: 2026-11-18 22:24 · branch `main` · latest commit dc7ef42 (Round 1: grade math) · Round 1 committed + pushed
 
-**Goal:** build GradeCalc in rounds 0-6 (TODO.md). Now: finish Round 1 (grade math) and commit + push it.
+**Goal:** build GradeCalc in rounds 0-6 (TODO.md). Rounds 0 and 1 are done and pushed; Round 2 (guest app) is next.
 
 **Done this session**
 - Round 0 committed + pushed + deployed (site live; Workers Builds connected by Aidan, build cmd `node scripts/leakguard.mjs --ci`).
 - LeakGuard hardened + pushed: fails closed (exit 2) without ../Gradebook/program/program.json; `--ci` mode; `npm run setup-hooks`;
   tests/leakguard.test.js; CLAUDE.md "Fresh clone" section.
-- Round 1 (uncommitted): `shared/calc.js` (Gradebook core + UWindsor letters/scales, letter-only marks, course types,
+- Round 1 (committed dc7ef42): `shared/calc.js` (Gradebook core + UWindsor letters/scales, letter-only marks, course types,
   nested components, weight check, repeats, needPerItem, credit-weighted points GPA, dynamic years);
   tests ported from Gradebook with real-course names removed (calc/curves/excused/candle.test.js, helpers.js) +
   tests/features.test.js; tests/run-tests.js supports global test() and exported `tests`; DECISIONS.md "Math" section with cited source.
