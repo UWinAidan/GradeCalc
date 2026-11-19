@@ -3,16 +3,28 @@
 A free grade calculator for university students: **https://gradecalc.aidanwbrown.com** (coming soon).
 
 Set up your terms and courses, enter marks as you get them, and see your **grade so far**, your **current average**, what you
-**need** on what's left, and your term and cumulative averages and GPA. It works fully in your browser without an
-account. If you want sync across devices, you can sign in with Google or Microsoft.
+**need** on what's left (labelled as a projection), and your term and cumulative averages and GPA. It works fully in your
+browser, with no account.
+
+What it does now:
+- A setup wizard for your first course (copy the weights from your syllabus), or demo data to try it out.
+- Drop lowest, bonus marks, curves, excused items, final-replaces-midterm, pass/fail, transfer and withdrawn courses.
+- Repeated courses: UWindsor counts your best attempt; you can pick latest or all attempts instead (Settings, or per course
+  in Edit structure).
+- Grade scales: UWindsor percentage, UWindsor 13-point, generic 4.0 and 12-point, or your own.
+- Graphs, light and dark themes, a change history per course, Recently deleted (30 days), and a print view.
+
+Coming later: Excel / CSV / JSON backup and course templates, then optional sign-in with Google or Microsoft to sync
+across devices.
 
 Made for students at the University of Windsor, but anyone can use it. *Not affiliated with or endorsed by the University
 of Windsor.*
 
 ## Privacy in one paragraph
-Without an account, your grades never leave your browser. With an account, your gradebook is stored in a Cloudflare D1
-database and only you can see it. No passwords are stored (sign-in is via Google/Microsoft), and there are no ads,
-trackers or analytics. You can download or delete everything at any time. Details: [Privacy](https://gradecalc.aidanwbrown.com/privacy).
+Right now there are no accounts: your grades stay in your browser (localStorage) and are never sent anywhere. When
+optional accounts arrive, your gradebook will be stored in a Cloudflare D1 database and only you will be able to see it.
+No passwords will be stored (sign-in via Google/Microsoft), and you will be able to download or delete everything at any
+time. There are no ads, trackers or analytics. Details: [Privacy](https://gradecalc.aidanwbrown.com/privacy).
 
 ## Run it yourself
 Requirements: Node 20+.

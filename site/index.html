@@ -2,46 +2,42 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
 <title>GradeCalc — free grade calculator</title>
-<meta name="description" content="GradeCalc: a free grade calculator for university courses. Weighted grades, what you need on the final, term averages and GPA. Coming soon.">
+<meta name="description" content="GradeCalc: a free grade calculator for university courses. Weighted grades, what you need on the final, term averages and GPA. Works in your browser, no account needed.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/css/tokens.css">
 <link rel="stylesheet" href="/css/app.css">
 <script src="/js/theme.js"></script>
-<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/app.js"></script>
 </head>
-<body>
-<header class="top">
-  <a class="home" href="/"><img src="/favicon.svg" alt="">GradeCalc</a>
-  <span class="tag">Free grade calculator</span>
-  <nav aria-label="Site">
-    <a href="/" aria-current="page">Home</a>
-    <a href="/about">About</a>
-    <a href="/privacy">Privacy</a>
-    <button class="btn small" id="theme-btn" type="button" aria-label="Switch light / dark theme">◐ Theme</button>
-  </nav>
-</header>
-<main>
-  <section class="hero">
-    <img src="/favicon.svg" alt="AB monogram">
-    <p><span class="badge" id="coming-soon">Coming soon</span></p>
-    <h1>GradeCalc</h1>
-    <p class="muted">A free grade calculator for your university courses. Works in your browser with no account needed.
-      You'll be able to sign in with Google or Microsoft to sync across devices.</p>
-  </section>
-  <ul class="features" aria-label="Planned features">
-    <li><b>Grade so far &amp; current average</b>Weighted components, dropped lowest, bonus marks, curves.</li>
-    <li><b>What do I need?</b>The mark you need on what's left to hit your target, labelled as a projection.</li>
-    <li><b>Term &amp; cumulative averages, GPA</b>Credit-weighted, with a choice of GPA scales.</li>
-    <li><b>Graphs</b>Your grades over time, by term and by course.</li>
-    <li><b>Share course setups</b>Send classmates a course's structure (never your marks).</li>
-    <li><b>Excel, CSV &amp; JSON</b>Export everything, back it up, bring it back.</li>
-  </ul>
-  <p class="muted center">Built by Aidan Brown. <a href="/about">About</a></p>
-</main>
-<footer class="site">
-  <div class="links"><span>© 2026 Aidan Brown</span><a href="https://aidanwbrown.com" target="_blank" rel="noopener">aidanwbrown.com</a><a href="/about">About</a><a href="/privacy">Privacy</a></div>
-  <div class="disclaimer">Not affiliated with or endorsed by the University of Windsor.</div>
-</footer>
+<body class="welcome">
+  <header class="topbar">
+    <a class="brand" href="#/" aria-label="GradeCalc home"><img src="/favicon.svg" alt="" width="26" height="26"><span>GradeCalc</span></a>
+    <button class="back" id="back" type="button" aria-label="Back">‹ Back</button>
+    <a class="btn icon nav-graphs-btn needs-data" id="nav-graphs" href="#/" aria-label="Graphs" title="Graphs"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2 2v12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 10.5 7.5 7l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Graphs</span></a>
+    <span class="save-state" id="save-state" role="status" aria-live="polite"></span>
+    <nav class="tools">
+      <button type="button" class="btn primary only-desktop needs-data" id="add-mark">+ Mark</button>
+      <button type="button" class="btn needs-data" id="toggle-structure" aria-pressed="false">Edit structure</button>
+      <button type="button" class="btn icon" id="open-settings" title="Settings" aria-label="Settings">⚙</button>
+      <button type="button" class="btn icon" id="toggle-theme" title="Light / dark" aria-label="Switch light or dark theme">◐</button>
+    </nav>
+  </header>
+
+  <main class="panes">
+    <section class="pane pane-overview" id="pane-overview" aria-label="Overview"></section>
+    <section class="pane pane-term" id="pane-term" aria-label="Term"></section>
+    <section class="pane pane-course" id="pane-course" aria-label="Course"></section>
+  </main>
+
+  <div class="loading" id="loading">Loading…</div>
+  <button type="button" class="fab needs-data" id="fab-mark" aria-label="Add a mark">+ Mark</button>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <dialog id="dlg" class="dlg"></dialog>
+  <dialog id="sheet" class="dlg sheet"></dialog>
+  <dialog id="drawer" class="dlg drawer"></dialog>
 </body>
 </html>

@@ -6,6 +6,9 @@
   "main": "worker/index.js",
   "compatibility_date": "2026-11-01",
 
+  // Copies shared/calc.js into ./site/js before every `wrangler dev` / `wrangler deploy` (the copy is gitignored).
+  "build": { "command": "node scripts/build.mjs" },
+
   "assets": {
     "directory": "./site",
     "binding": "ASSETS",

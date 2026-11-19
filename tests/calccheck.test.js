@@ -172,7 +172,7 @@ test('repeats best / all / default policy from settings', () => {
   near(computeAll(simple(specs, { terms: terms3, ...rep('best', [1, 2]) })).cumulative.soFar, 0.8);
   near(computeAll(simple(specs, { terms: terms3, ...rep('all', [1, 2]) })).cumulative.soFar, 0.7); // (0.6+0.8)/2, equal credits
   near(computeAll(simple(specs, { terms: terms3, repeats: [{ id: 'g', course_ids: [1, 2] }], settings: { repeat_policy_default: 'best' } })).cumulative.soFar, 0.8);
-  near(computeAll(simple(specs, { terms: terms3, repeats: [{ id: 'g', course_ids: [1, 2], policy: 'bogus' }] })).cumulative.soFar, 0.8); // bogus -> latest -> term 2 -> 0.8
+  near(computeAll(simple(specs, { terms: terms3, repeats: [{ id: 'g', course_ids: [1, 2], policy: 'bogus' }] })).cumulative.soFar, 0.8); // bogus -> default best -> 0.8
 });
 
 test('repeats: cumulativeTo(year) should reflect only attempts up to that year', () => {

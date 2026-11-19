@@ -1,0 +1,28 @@
+/* "Sage Classic" — palette from aidanwbrown.com (same tokens as EconSolver / Gradebook). Dark is the brand default;
+   [data-theme="light"] is the site's light set. --muted is a touch lighter (dark) / darker (light) than the site's
+   #7e8583 / #6f7672 so small grey text passes WCAG AA on the panels. */
+:root {
+  --bg: #1a1c1d; --panel: #2a2e2f; --ink: #ebe9e4; --muted: #9aa19e; --line: #3b4041; --input: #1f2223;
+  --accent: #a9b8a4; --accent-ink: #c5d1bf; --accent-soft: #333a33; --on-accent: #1a1c1d;
+  --good: #5ad08e; --good-soft: #1d3a29; --warn: #f0b452; --warn-soft: #3a2f1a; --bad: #f28b82; --bad-soft: #3d2422;
+  /* Names the calculator (ported from Gradebook) uses, mapped onto the site tokens. */
+  --surface: var(--panel); --surface-2: #323738; --text: var(--ink); --highlight: var(--accent-ink); --focus: var(--accent-ink);
+  --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  --viz-main: #a9b8a4; --viz-ctx: #7a8280; --viz-grid: #3b4142; --viz-up: #5ad08e; --viz-down: #f0655a;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  --sans: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f1f0ec; --panel: #ffffff; --ink: #1f2321; --muted: #5f6662; --line: #dcdbd5; --input: #fafaf8;
+  --accent: #5f735c; --accent-ink: #4a5d47; --accent-soft: #e3e9e0; --on-accent: #ffffff;
+  --good: #0b7a45; --good-soft: #dcf2e4; --warn: #8a5300; --warn-soft: #f8ecd6; --bad: #b42318; --bad-soft: #fae3e0;
+  --surface-2: #eceae4; --shadow: 0 10px 30px rgba(0, 0, 0, .15);
+  --viz-main: #55684f; --viz-ctx: #8a908d; --viz-grid: #e4e2dc; --viz-up: #2ca562; --viz-down: #a52a22;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent-ink); }
+::selection { background: var(--accent); color: var(--on-accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

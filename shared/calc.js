@@ -16,7 +16,8 @@ export const RULES = {
 };
 
 export const COURSE_TYPES = ['graded', 'pass_fail', 'transfer', 'withdrawn'];
-export const REPEAT_POLICIES = ['latest', 'best', 'all'];
+export const REPEAT_POLICIES = ['best', 'latest', 'all'];
+export const DEFAULT_REPEAT_POLICY = 'best'; // UWindsor: only the highest mark counts (DECISIONS.md)
 export const VIEWS = ['soFar', 'average', 'projected'];
 const EPS = 1e-9;
 
@@ -88,12 +89,13 @@ export function resolveScale(settings = {}) {
     return { id: 'custom', name: cs.name || 'Custom', kind: cs.kind === 'percent' ? 'percent' : 'points', max: cs.max ?? null,
       official: false, bands: cs.bands.map((b) => ({ min: Number(b.min), letter: b.letter ?? '', points: b.points ?? null })) };
   }
-  return SCALES[id] || SCALES[DEFAULT_SCALE];
+  return Object.prototype.hasOwnProperty.call(SCALES, id) ? SCALES[id] : SCALES[DEFAULT_SCALE];
 }
 
 /** The band a fraction falls in (lower bounds inclusive, with float tolerance). null below every band or for null. */
 export function bandOf(avg, scale) {
   if (avg === null || avg === undefined || !scale) return null;
+  avg = Math.round(avg * 1e4) / 1e4; // the percentage as shown (2 decimals), so "80.00%" never sits next to a B+
   const sorted = [...scale.bands].sort((a, b) => b.min - a.min);
   for (const b of sorted) if (avg >= b.min - EPS) return b;
   return null;
@@ -582,8 +584,8 @@ const termRank = (terms) => new Map([...terms].map((t, i) => [t.id, [t.sort_orde
  * Counts toward averages: 'graded' courses with marks or a set final grade. Pass/fail, transfer and withdrawn courses
  * never count in averages (pass/fail and transfer credits are reported separately).
  * Repeated courses (doc.repeats = [{id, course_ids, policy}]): term averages show every attempt in its own term;
- * year and cumulative averages count per the policy — 'latest' (the latest attempt that has a grade), 'best' (the
- * highest), or 'all'.
+ * year and cumulative averages count per the policy — 'best' (the highest; default), 'latest' (the latest attempt
+ * that has a grade), or 'all'.
  * GPA: on a 'points' scale, the credit-weighted mean of each course's points; on a 'percent' scale there are no
  * points and the letter of the percentage average is shown.
  */
@@ -623,12 +625,16 @@ export function computeAll(doc) {
     const calcProjected = graded ? courseProjected(course, leaves, itemsByComp, calc) : null;
     const { result, projected } = applyOverride(course, calc, calcProjected);
     if (course.final_estimated && result.overridden) result.estimated = true;
-    const pts = (v) => (graded ? gpaOf(v, scale) : null);
+    // A final grade set as a letter keeps that letter (and its points) when the chosen scale has it.
+    const setBand = graded && result.overridden && course.final_estimated
+      ? scale.bands.find((b) => b.letter === String(course.final_letter).trim().toUpperCase()) : null;
+    const pts = (v) => (!graded ? null : setBand && scale.kind === 'points' ? setBand.points : gpaOf(v, scale));
+    const let1 = (v) => (setBand ? setBand.letter : letterOf(v, scale));
     courses.set(course.id, {
       course, result, projected,
       counts: graded && result.hasMarks,
       gpa: { soFar: pts(result.soFar), average: pts(result.average), projected: pts(projected) },
-      letter: graded ? { soFar: letterOf(result.soFar, scale), average: letterOf(result.average, scale), projected: letterOf(projected, scale) } : null,
+      letter: graded ? { soFar: let1(result.soFar), average: let1(result.average), projected: let1(projected) } : null,
     });
   }
 
@@ -638,7 +644,7 @@ export function computeAll(doc) {
   const groups = [];
   const repeatOf = new Map();
   for (const g of doc.repeats || []) {
-    const policy = REPEAT_POLICIES.includes(g.policy) ? g.policy : (REPEAT_POLICIES.includes(settings.repeat_policy_default) ? settings.repeat_policy_default : 'latest');
+    const policy = REPEAT_POLICIES.includes(g.policy) ? g.policy : (REPEAT_POLICIES.includes(settings.repeat_policy_default) ? settings.repeat_policy_default : DEFAULT_REPEAT_POLICY);
     const ids = new Set((g.course_ids || []).filter((id) => courses.has(id)));
     for (const id of ids) repeatOf.set(id, { group: g.id, policy });
     groups.push({ ids, policy });
@@ -686,8 +692,10 @@ export function computeAll(doc) {
     };
     out.gpa = { soFar: pointsMean('soFar'), average: pointsMean('average'), projected: pointsMean('projected') };
     out.letter = { soFar: letterOf(out.soFar, scale), average: letterOf(out.average, scale), projected: letterOf(out.projected, scale) };
-    out.courses = counted.length;
-    out.credits = counted.reduce((s, r) => s + r.course.credits, 0);
+    // Courses and credits: the attempts that count (average view), so a repeated course is counted once.
+    const kept = excluded ? counted.filter((r) => !excluded.average.has(r.course.id)) : counted;
+    out.courses = kept.length;
+    out.credits = kept.reduce((s, r) => s + r.course.credits, 0);
     out.passCredits = list.filter((r) => r.course.type === 'pass_fail' && r.course.pass_result === 'pass').reduce((s, r) => s + r.course.credits, 0);
     out.transferCredits = list.filter((r) => r.course.type === 'transfer').reduce((s, r) => s + r.course.credits, 0);
     return out;

@@ -211,8 +211,15 @@ const repeatDoc = (first, second, policy, settings = {}) => doc({
   repeats: [{ id: 'r1', course_ids: [1, 2], ...(policy ? { policy } : {}) }],
 });
 
-test('repeat policy latest (default): only the latest attempt counts in year/cumulative; terms show both', () => {
+test('repeat policy best is the default (UWindsor): the higher attempt counts', () => {
   const all = computeAll(repeatDoc(0.8, 0.7));
+  near(all.cumulative.soFar, (0.8 + 0.9) / 2, 'best attempt 0.8 + other course 0.9');
+  assert.equal(all.courses.get(1).repeat.policy, 'best');
+  assert.equal(all.courses.get(2).repeat.excluded.soFar, true);
+});
+
+test('repeat policy latest: only the latest attempt counts in year/cumulative; terms show both', () => {
+  const all = computeAll(repeatDoc(0.8, 0.7, 'latest'));
   near(all.cumulative.soFar, (0.7 + 0.9) / 2, 'latest attempt 0.7 + other course 0.9');
   near(all.terms.get(1).soFar, 0.8, 'the first attempt still shows in its own term');
   near(all.years.get(1).soFar, 0.8, 'year 1 decides among its own attempts: only the first one is in it');
@@ -223,11 +230,11 @@ test('repeat policy latest (default): only the latest attempt counts in year/cum
 test('repeat policy best and all', () => {
   near(computeAll(repeatDoc(0.8, 0.7, 'best')).cumulative.soFar, (0.8 + 0.9) / 2);
   near(computeAll(repeatDoc(0.8, 0.7, 'all')).cumulative.soFar, (0.8 + 0.7 + 0.9) / 3);
-  near(computeAll(repeatDoc(0.8, 0.7, undefined, { repeat_policy_default: 'best' })).cumulative.soFar, (0.8 + 0.9) / 2, 'default from settings');
+  near(computeAll(repeatDoc(0.8, 0.7, undefined, { repeat_policy_default: 'latest' })).cumulative.soFar, (0.7 + 0.9) / 2, 'default from settings');
 });
 
 test('repeat latest: a retake with no marks yet does not hide the earlier grade', () => {
-  near(computeAll(repeatDoc(0.6, null)).cumulative.soFar, (0.6 + 0.9) / 2);
+  near(computeAll(repeatDoc(0.6, null, 'latest')).cumulative.soFar, (0.6 + 0.9) / 2);
 });
 
 // ---------------------------------------------------------------- per-item "what do I need"

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "test": "node tests/run-tests.js",
+    "build": "node scripts/build.mjs",
     "test:ui": "node tests/ui-check.mjs",
     "leakguard": "node scripts/leakguard.mjs",
     "leakguard:ci": "node scripts/leakguard.mjs --ci",

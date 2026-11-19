@@ -9,13 +9,17 @@ its D1 database. GradeCalc starts completely blank. **The GitHub repo is public.
 
 ## Layout
 - `site/` — the static page (plain ES modules, no frameworks, no CDNs). `site/_headers` = CSP + security headers.
-  `site/vendor/` = pinned third-party libraries with their licence files (SheetJS CE, Round 4).
-- `shared/calc.js` — all grade math (Round 1), used by the page and the tests. Copied into `site/js/` by the build.
+  `/` = the calculator (`index.html`, `js/app.js` + `ui.js`, `wizard.js`, `charts.js`, ported from Gradebook);
+  `js/store.js` = guest-mode storage (one JSON document in localStorage, same shape an account will sync);
+  `js/demo.js` = made-up demo data. CSS: `css/tokens.css` (Sage Classic tokens, both themes) + `css/app.css` (calculator)
+  or `css/site.css` (About, Privacy). `site/vendor/` = pinned third-party libraries with licence files (SheetJS CE, Round 4).
+- `shared/calc.js` — all grade math (Round 1), used by the page and the tests. `scripts/build.mjs` copies it to
+  `site/js/calc.js` (gitignored; wrangler.jsonc `build` runs it before every dev/deploy, ui-check runs it too).
 - `worker/` — Cloudflare Worker: `/api/*` (gradebook sync, account, admin) and `/auth/*` (Google/Microsoft OIDC).
   Static files are served without running the Worker.
 - `migrations/` — D1 schema for database `gradecalc` (binding `gradecalc`).
 - `tests/` — `run-tests.js` (unit + Worker tests, `*.test.js`), `ui-check.mjs` (Playwright, installed Edge/Chrome), `serve.mjs`.
-- `scripts/leakguard.mjs` — pre-push leak check (`.githooks/pre-push`; enable with `npm run hooks`).
+- `scripts/leakguard.mjs` — pre-push leak check (`.githooks/pre-push`; enable with `npm run setup-hooks`).
 
 ## Commands
 - `node tests/run-tests.js` — must stay all-pass.
@@ -49,7 +53,7 @@ its D1 database. GradeCalc starts completely blank. **The GitHub repo is public.
 - Projections ("what do I need", projected grade) are labelled as projections and never stored as marks.
 - Only call a GPA scale "UWindsor" if it matches the university's official published scale, cited in DECISIONS.md.
 - Footer and About say: "Not affiliated with or endorsed by the University of Windsor."
-- Look: "Sage Classic" (tokens in `site/css/app.css`, same as EconSolver/Gradebook), dark by default with a light theme,
+- Look: "Sage Classic" (tokens in `site/css/tokens.css`, same as EconSolver/Gradebook), dark by default with a light theme,
   AB monogram favicon. Works at 360 px; print-friendly course view.
 - Named agents in `.claude/agents/`: **CalcCheck** (math), **AuthGuard** (accounts/isolation), **LeakGuard** (before every
   push), **GuideWriter** (How to use + Privacy in sync). Each round: run all four + ui-check, then commit and push.

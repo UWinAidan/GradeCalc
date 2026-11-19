@@ -10,6 +10,29 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
 - **Went live in Round 0 with a "coming soon" page** (Aidan, 2026-11-18) so the deploy pipeline is proven early.
 - **Footer + About disclaimer:** "Not affiliated with or endorsed by the University of Windsor." (Aidan, 2026-11-18).
 
+## Guest app (Round 2)
+- **The calculator is the home page (`/`).** First visit shows a welcome screen with one clear next step (set up a course
+  with the wizard), plus demo data and "start with a term". The coming-soon page is gone.
+- **Guest storage = one JSON document in localStorage** (`gc-gradebook`, `site/js/store.js`): terms, courses,
+  components, assessments, repeats, settings, plus an audit list (history, capped at 1000) and soft-deleted rows
+  (Recently deleted, purged after 30 days). `store.api` has the same shape as Gradebook's server API
+  (create / patch / remove / restore / deleted / audit), so the ported page code barely changed, and Round 5 can sync
+  the same document. `normalize()` drops unknown fields and fills defaults for anything stored or imported.
+  Other tabs reload on the `storage` event.
+- **The page never patches calc.js's copies:** calc returns copies of components/items (nesting, letter estimates), so
+  `patch()` looks the stored row up by id.
+- **Course codes are free text** (any school), max 20 characters; Gradebook's UWindsor code pattern is gone. Terms are
+  free-named; "Fall 2026" style names fill season + year automatically. Year of study 1–10, optional.
+- **Letter on a percentage scale, GPA on a points scale** everywhere a GPA used to be (overview, terms, courses).
+- **Graphs:** the cumulative line re-runs `computeAll` on the terms up to each point, so the repeat policy applies to the
+  attempts made so far (same rule as cumulative-to-year).
+- **Nesting in the page: one level.** "Split into parts" turns a component into a group; its items move into part 1.
+  Parts have a "share of group" number, shown as "% of course".
+- **"What do I need" per remaining item** shows under each open item once a target is typed, labelled est.
+- **CSS split** into tokens.css (shared), site.css (content pages), app.css (calculator, from Gradebook) because the
+  calculator's full-height pane layout and the content pages' prose layout conflict.
+- **Print:** the course pane only (Print button on a course; `@media print` hides everything else).
+
 ## Data model and sync (planned, Round 5)
 - **One row per user** in `gradebooks`: the whole gradebook as versioned JSON + `version` + `updated_at`. Inside the JSON
   the shape mirrors Gradebook's tables (`terms`, `courses`, `components`, `assessments`), so `calc.js` carries over.
@@ -49,15 +72,25 @@ What the policy says, and what GradeCalc does with it:
   That's how grade-point averages work. Gradebook mapped the mean percentage; GradeCalc doesn't.
 - **Pass/fail, transfer and withdrawn courses never count in averages** (P/NP has "no numeric grade equivalent").
   Passed pass/fail credits and transfer credits are reported separately; withdrawn credits nowhere.
-- **Repeated courses.** ⚠ The policy says *only the highest mark* counts in cumulative and major averages (except
-  Nursing clinical courses, where the final attempt counts). Aidan chose the default "latest attempt counts"
-  (2026-11-18) before this was found. **The default is still "latest" until he confirms**; "best" matches the policy.
-  It's one constant (`settings.repeat_policy_default`, fallback in `computeAll`). Term averages show every attempt in
-  its own term. Year, cumulative-to-year and cumulative averages apply the policy **among the attempts inside that
-  scope** (CalcCheck, Round 1), so "cumulative to year 1" uses the year-1 attempt even if year 2 has a retake. "Latest" means the latest attempt *that has a grade*, so
-  a retake in progress doesn't hide the earlier mark.
+- **Repeated courses: default "best attempt counts"** (Aidan, 2026-11-18). Since the 2017 change, UWindsor uses only
+  the highest mark in cumulative and major averages; Nursing clinical courses are the exception (the final attempt
+  supersedes). Source: Academic Policy Committee minutes, 20 September 2017, item 5.3 Motion 2 and its friendly amendment
+  (verified by reading the PDF on 2026-11-18):
+  <https://www.uwindsor.ca/secretariat/sites/uwindsor.ca.secretariat/files/apc170920m.pdf>. The Senate grading
+  policy above (policy III) says the same. Per course group the policy can be changed to "latest attempt counts" (what
+  many other schools, and Nursing clinical courses, use) or "all attempts count". Default = `DEFAULT_REPEAT_POLICY` in
+  `calc.js`, overridable by `settings.repeat_policy_default`. Term averages show every attempt in its own term. Year,
+  cumulative-to-year and cumulative averages apply the policy **among the attempts inside that scope** (CalcCheck,
+  Round 1), so "cumulative to year 1" uses the year-1 attempt even if year 2 has a retake. "Latest" means the latest
+  attempt *that has a grade*, so a retake in progress doesn't hide the earlier mark.
 - **Rounding:** the policy rounds averages to 2 decimals (88.985 → 88.99). The math keeps full precision; the page
   shows 2 decimals.
+  Letters and grade points come from the percentage **as shown** (rounded to 2 decimals), so "80.00%" is never shown next
+  to a B+ (CalcCheck, Round 2).
+- **A repeated course's credits count once** in year/cumulative course and credit counts: only the attempt(s) the policy
+  keeps (CalcCheck, Round 2). Term counts still show every attempt in its own term.
+- **A final grade set as a letter keeps that letter** (and its points) on the chosen scale when the scale has it, rather
+  than going through the UWindsor midpoint (e.g. F on the 13-point scale = 1 point, not F- = 0).
 - **Letter-only marks** (a letter, no number): the middle of the letter's integer range (A+ 95, A 87, B 74.5 …
   F 24.5), flagged *estimated* in results. The stored document keeps the letter, and a number always beats a letter.
 
