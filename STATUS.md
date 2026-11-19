@@ -7,39 +7,41 @@
 | D1 database `gradecalc` | ✅ created (empty; schema comes in Round 5) |
 | Coming-soon page, About, Privacy (current state), footer disclaimer, theme | ✅ Round 0 |
 | Workers Builds → gradecalc.aidanwbrown.com | ⏳ Aidan connects the repo (README "Hosting") |
-| Tests | ✅ run-tests 3/0 · ui-check 96/0 · LeakGuard PASS |
-| Math (Round 1) · Guest app (2) · Edit structure (3) · Files (4) · Accounts (5) · Guide + PWA (6) | ⏳ |
+| Tests | ✅ run-tests 115/0 · ui-check 96/0 · LeakGuard PASS (2026-11-18, Round 1) |
+| Math (Round 1) | ✅ shared/calc.js; run-tests 115/0 (CalcCheck found 7 edge-case bugs, fixed); UWindsor scale cited |
+| Guest app (2) · Edit structure (3) · Files (4) · Accounts (5) · Guide + PWA (6) | ⏳ |
 
 ## Session handoff (ContextKeeper)
-Updated: 2026-11-18 21:53 · branch `main` · latest commit bceae35 (Initial commit); Round 0 committed + pushed this session
+Updated: 2026-11-18 22:19 · branch `main` · latest commit (see `git log -1`; LeakGuard hardening pushed) · Round 1 committed + pushed
 
-**Goal:** build GradeCalc (public grade calculator, gradecalc.aidanwbrown.com) in rounds 0–6 per the approved plan
-(TODO.md). Current: finish Round 0 (scaffold + coming-soon page live).
+**Goal:** build GradeCalc in rounds 0-6 (TODO.md). Now: finish Round 1 (grade math) and commit + push it.
 
-**Done this session:** plan approved (Aidan's answers are recorded in DECISIONS.md). Created D1 `gradecalc`
-(id 3c304d47-db95-46d4-80ab-c55ccd9facc1, empty). Wrote: wrangler.jsonc, worker/index.js (404 JSON for /api, /auth),
-site/ (index coming-soon, about, privacy, css/app.css, js/theme.js, js/site.js, _headers CSP, robots.txt, favicon.svg),
-scripts/leakguard.mjs + .githooks/pre-push (core.hooksPath set locally), tests/ (run-tests.js, worker.test.js, serve.mjs,
-ui-check.mjs), 4 agents in .claude/agents/, ContextKeeper copied from Gradebook, CLAUDE/TODO/DECISIONS/STATUS/README, .dev.vars.example.
+**Done this session**
+- Round 0 committed + pushed + deployed (site live; Workers Builds connected by Aidan, build cmd `node scripts/leakguard.mjs --ci`).
+- LeakGuard hardened + pushed: fails closed (exit 2) without ../Gradebook/program/program.json; `--ci` mode; `npm run setup-hooks`;
+  tests/leakguard.test.js; CLAUDE.md "Fresh clone" section.
+- Round 1 (uncommitted): `shared/calc.js` (Gradebook core + UWindsor letters/scales, letter-only marks, course types,
+  nested components, weight check, repeats, needPerItem, credit-weighted points GPA, dynamic years);
+  tests ported from Gradebook with real-course names removed (calc/curves/excused/candle.test.js, helpers.js) +
+  tests/features.test.js; tests/run-tests.js supports global test() and exported `tests`; DECISIONS.md "Math" section with cited source.
 
-**State (observed):** run-tests 3/0 · ui-check 96/0 · LeakGuard PASS (and it FAILS correctly on planted secret /
-tracker / real course code). Screenshots at 360 px and desktop look right.
+**State (observed):** run-tests 115/0 (incl. CalcCheck's tests/calccheck.test.js), ui-check 96/0, LeakGuard PASS.
 
-**In progress:** none. LeakGuard agent review of Round 0: all 8 items PASS (no .leakguard.local.txt yet; optional).
+**In progress:** none. CalcCheck found 7 bugs (negative credits, repeats per scope, orphan/self/loop/deep nesting, parent rules, needFor on a parent); all fixed.
+
+**Open question for Aidan:** UWindsor Senate policy says repeated courses count the HIGHEST mark (policy III);
+Aidan chose default "latest" before this was found. Default kept "latest" until he confirms (DECISIONS.md).
 
 **Next steps**
-1. Re-run `node scripts/leakguard.mjs --staged` (and optionally the LeakGuard agent), fix anything found.
-2. Commit Round 0 (with Co-Authored-By line) and push to main (pre-push hook runs LeakGuard).
-3. `npx wrangler deploy` once so the coming-soon page goes live (approved: "go live in Round 0"); check https://gradecalc.aidanwbrown.com.
-4. Ask Aidan to connect Workers Builds (README "Hosting" step 1).
-5. Start Round 1: port ../Gradebook/shared/calc.js → shared/calc.js (rewrite comments that describe his real courses),
-   research the official UWindsor GPA/grade scale and cite it in DECISIONS.md, or name the scale generically.
+1. Wait for Aidan's answer on the repeat default (policy = highest). Then Round 2 (guest app): add scripts/build.mjs copying
+   shared/calc.js → site/js/ (wrangler "build" or Workers Builds command), localStorage store, wizard, demo data, graphs.
 
 **Gotchas**
-- `gh repo clone` / plain `git clone` of private repos hangs here; use `GIT_TERMINAL_PROMPT=0 git -c credential.helper='!gh auth git-credential' clone --depth 1`. For EconSolver (20 MB) fetch single files with `gh api -H "Accept: application/vnd.github.raw" repos/UWinAidan/EconSolver/contents/<path>`.
-- Local private Gradebook checkout is at ../Gradebook (LeakGuard reads its program.json for fingerprints). Never copy data from it.
-- CSP has no 'unsafe-inline': no style="" attributes or inline scripts in HTML.
-- D1 binding name is `gradecalc` (env.gradecalc), as Aidan specified.
-- ui-check uses installed Edge via playwright-core (channel msedge).
+- Private repo clones hang: `GIT_TERMINAL_PROMPT=0 git -c credential.helper='!gh auth git-credential' clone --depth 1 ...`;
+  EconSolver files via `gh api -H "Accept: application/vnd.github.raw" repos/UWinAidan/EconSolver/contents/<path>`.
+- Local Gradebook at ../Gradebook (read-only reference; never copy data). Its test names referenced real courses — sanitized.
+- CSP has no 'unsafe-inline'. Cloudflare serves /about for about.html (links use extensionless URLs; tests/serve.mjs mimics).
+- D1 binding `gradecalc` (env.gradecalc). Deploy manually: `npx wrangler deploy`; now Workers Builds deploys on push.
+- PDF text: `python -c "import pypdf"` works (no poppler for Read tool).
 
-**Read first:** CLAUDE.md, TODO.md, DECISIONS.md, scripts/leakguard.mjs, tests/ui-check.mjs.
+**Read first:** CLAUDE.md, DECISIONS.md (Math), shared/calc.js, tests/features.test.js, TODO.md.

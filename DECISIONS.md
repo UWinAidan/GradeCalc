@@ -27,10 +27,56 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
 - **Admin page** only for a Google sign-in whose verified email is `ADMIN_EMAIL` (4aidanbrown@gmail.com); shows user count
   and storage size only, never grades.
 
-## Math (planned, Round 1)
-- **Repeated courses:** default "latest attempt counts", changeable per course (latest / best / all) (Aidan, 2026-11-18).
-- **GPA scales:** a scale is only labelled "UWindsor" if it matches the university's official published scale, with the
-  source cited here. Otherwise it's named generically (e.g. "Percentage → 4.0"). (Aidan, 2026-11-18.) Source: TBD in Round 1.
+## Math (Round 1)
+**Source for everything labelled "UWindsor":** University of Windsor, *Senate Policy: Policy on Grading and Calculation
+of Averages* (last amended April 13, 2018), sections I–III.
+<https://www.uwindsor.ca/law/student-resources/sites/uwindsor.ca.law.student-resources/files/grading_policy.pdf>
+(retrieved 2026-11-18; a copy hosted on uwindsor.ca. I couldn't find a newer version on the Secretariat site. If one
+appears, re-check the tables below against it.)
+
+What the policy says, and what GradeCalc does with it:
+- **Since Fall 2013 UWindsor grades are percentages (integers), not grade points.** The transcript back carries a
+  percentage → letter table (A+ 90–100, A 85–89.9, A- 80–84.9, B+ 77–79.9, B 73–76.9, B- 70–72.9, C+ 67–69.9,
+  C 63–66.9, C- 60–62.9, D+ 57–59.9, D 53–56.9, D- 50–52.9, F 0–49.9). So the default scale **"UWindsor (percentage,
+  with letter)"** has **no GPA points**: the average *is* the percentage, and the letter is shown beside it.
+- **"UWindsor 13-point (courses before Fall 2013)"** is the policy's pre-Fall-2013 conversion table, verbatim.
+- **"Percentage → 4.0 (generic)" and "Percentage → 12-point (generic)"** are not official UWindsor scales. They use
+  the UWindsor letter cut-offs with the common 4.0 / 12-point values (A+ and A = 4.0, A- 3.7 … D- 0.7, F 0;
+  A+ 12 … D- 1, F 0), and they're labelled generic in the picker. Custom scales: any bands {min, letter, points}.
+- **Averages are credit-weighted** (policy III: a 6-credit course weighs double a 3-credit one). The policy's two
+  worked examples are unit tests (`tests/features.test.js`).
+- **GPA on a points scale = credit-weighted mean of each course's points**, not the points of the mean percentage.
+  That's how grade-point averages work. Gradebook mapped the mean percentage; GradeCalc doesn't.
+- **Pass/fail, transfer and withdrawn courses never count in averages** (P/NP has "no numeric grade equivalent").
+  Passed pass/fail credits and transfer credits are reported separately; withdrawn credits nowhere.
+- **Repeated courses.** ⚠ The policy says *only the highest mark* counts in cumulative and major averages (except
+  Nursing clinical courses, where the final attempt counts). Aidan chose the default "latest attempt counts"
+  (2026-11-18) before this was found. **The default is still "latest" until he confirms**; "best" matches the policy.
+  It's one constant (`settings.repeat_policy_default`, fallback in `computeAll`). Term averages show every attempt in
+  its own term. Year, cumulative-to-year and cumulative averages apply the policy **among the attempts inside that
+  scope** (CalcCheck, Round 1), so "cumulative to year 1" uses the year-1 attempt even if year 2 has a retake. "Latest" means the latest attempt *that has a grade*, so
+  a retake in progress doesn't hide the earlier mark.
+- **Rounding:** the policy rounds averages to 2 decimals (88.985 → 88.99). The math keeps full precision; the page
+  shows 2 decimals.
+- **Letter-only marks** (a letter, no number): the middle of the letter's integer range (A+ 95, A 87, B 74.5 …
+  F 24.5), flagged *estimated* in results. The stored document keeps the letter, and a number always beats a letter.
+
+Carried over from Gradebook (code only, comments rewritten without his course names):
+- **Two views:** grade so far (unmarked = 0) and current average (marked only). Projections never stored as marks.
+- Drop lowest (separately for so-far / average), bonus components, weights over 100 act as bonus (excess shared in
+  proportion to the marked weight), 100% cap, item curves (in the item's points) and course curves (add/mul/set, after
+  bonus, before the cap), excused items moving weight (to a component, or by date around a pivot), final-grade override,
+  absorb-if-higher and minimum-warning rules, candles for the graphs.
+- **Nested components:** the page offers one level, but the math is safe at any depth. Children share the parent's
+  course weight in proportion to their own weights (equal shares if all are 0). A parent with children ignores items
+  put directly on it (and warns). Bonus is inherited. A missing parent, a self-parent or a loop makes the component
+  top-level with a warning: nothing is silently dropped (CalcCheck, Round 1). A parent's `min_warning` is checked on
+  its roll-up; `absorb_if_higher` "from" a parent means all its leaves; "what do I need" can target a parent.
+  Other rules on a parent (drop, absorb *into* it, excused_to) are ignored: they belong on the leaves.
+- **Credits:** blank or invalid credits count as 0 and negative credits are clamped to 0, never negative weight.
+- **Live weight check:** top-level non-bonus weights vs 100. A warning, never blocking; the grade is still out of 100.
+- **Years come from the terms that exist** (any `year_of_study` number, optional). Terms without one count in the
+  cumulative average only. Gradebook had a fixed Year 1–4.
 
 ## Hosting and security
 - **Worker runs first only for `/api/*` and `/auth/*`**; the page is plain static assets (fast, cacheable, no Worker cost).

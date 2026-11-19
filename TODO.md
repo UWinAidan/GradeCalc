@@ -4,13 +4,14 @@
 - [x] Repo files, agents, ContextKeeper, LeakGuard + pre-push hook, wrangler.jsonc, D1 `gradecalc` created
 - [x] Coming-soon page, About, Privacy (current state), footer with disclaimer, theme toggle
 - [x] ui-check (Playwright) + Worker tests
-- [ ] **Aidan:** connect Workers Builds to this repo (README "Hosting" step 1) and check https://gradecalc.aidanwbrown.com
+- [x] Workers Builds connected (Aidan, 2026-11-18; build command `node scripts/leakguard.mjs --ci`)
 
 ## Round 1 — math
-- [ ] Port Gradebook `calc.js` (rewrite comments generically) + CalcCheck tests with made-up numbers
-- [ ] Points / letter input, pass-fail / transfer / withdrawn, repeated courses (default: latest counts), nested components
-- [ ] "What do I need" per course and per remaining item
-- [ ] GPA scales: find the official UWindsor source (cite in DECISIONS.md) or name it generically; 4.0, 12-point, custom
+- [x] Port Gradebook `calc.js` (rewrite comments generically) + tests with made-up numbers (CalcCheck: 7 bugs found and fixed)
+- [x] Points / letter input, pass-fail / transfer / withdrawn, repeated courses (default: latest counts), nested components
+- [x] "What do I need" per course and per remaining item
+- [x] GPA scales: UWindsor source cited (DECISIONS.md); UWindsor %, UWindsor 13-pt, generic 4.0 / 12-pt, custom
+- [ ] **Aidan:** confirm repeat default — policy says highest mark counts; current default "latest"
 
 ## Round 2 — guest app
 - [ ] localStorage store, quick start + setup wizard, courses/components/items, demo data, reset
