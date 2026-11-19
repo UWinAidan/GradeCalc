@@ -21,7 +21,7 @@ const newComp = (name = '', weight = '') => ({ name, weight, is_bonus: false, co
 
 /**
  * ctx: { terms, term, courses, compsOf(course), itemsOf(comp), defaultCredits, suggestTerm, create(entity, body) → row | null,
- *        patchRow(entity, row, changes) → Promise, done(term, course) }
+ *        patchRow(entity, row, changes) → Promise, batch(label, fn) (optional: one undo step), done(term, course) }
  * With no terms yet (quick start) the first step also names the new term.
  */
 export function openWizard(ctx) {
@@ -289,7 +289,9 @@ export function openWizard(ctx) {
   }
 
   // ---- create everything
-  async function createAll(btn) {
+  // The whole setup is one undo step when the page offers batch().
+  const createAll = (btn) => (ctx.batch ? ctx.batch('set up a course', () => createAllNow(btn)) : createAllNow(btn));
+  async function createAllNow(btn) {
     btn.disabled = true;
     err.textContent = 'Creating…';
     let term = ctx.terms.find((t) => t.id === d.term_id);

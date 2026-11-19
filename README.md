@@ -12,7 +12,13 @@ What it does now:
 - Repeated courses: UWindsor counts your best attempt; you can pick latest or all attempts instead (Settings, or per course
   in Edit structure).
 - Grade scales: UWindsor percentage, UWindsor 13-point, generic 4.0 and 12-point, or your own.
-- Graphs, light and dark themes, a change history per course, Recently deleted (30 days), and a print view.
+- Edit structure: reorder terms, courses, components and items (↑/↓, or drag on a computer), duplicate a course (for a
+  retake or next term) or a component, bulk add / edit marks ("Name: mark" lines), and archive old terms (they still
+  count in your averages).
+- Undo and redo (↶ ↷, or Ctrl+Z / Ctrl+Y) for this visit, and a preview of how your averages change before you save a
+  mark or delete something.
+- Graphs, light and dark themes, a change history (per course or all changes), Recently deleted (30 days), and a print
+  view.
 
 Coming later: Excel / CSV / JSON backup and course templates, then optional sign-in with Google or Microsoft to sync
 across devices.

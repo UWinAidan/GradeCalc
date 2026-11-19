@@ -94,3 +94,56 @@ test('store hardening (AuthGuard): no prototype keys, types coerced, ids safe, s
   await api.settings({ gpa_scale: 'gpa4', evil: true });
   assert.equal('evil' in saved().settings, false);
 });
+
+// ---------------------------------------------------------------- AuthGuard, Round 3: another tab, undo replays
+const otherTab = (fn) => { const d = JSON.parse(mem.get('gc-gradebook')); fn(d); mem.set('gc-gradebook', JSON.stringify(d)); };
+
+test('store (AuthGuard): a write from a stale copy never overwrites another tab’s save (missed storage event)', async () => {
+  const { onExternalChange } = await import('../site/js/store.js');
+  await api.replace(emptyDoc());
+  const t = await api.create('terms', { name: 'Made-up term' });
+  let told = 0;
+  onExternalChange(() => { told++; });
+  for (const write of [() => api.patch('terms', t.id, { name: 'Stale edit' }), () => api.create('terms', { name: 'Z' }),
+    () => api.remove('terms', t.id), () => api.restore('terms', t.id), () => api.settings({ default_credits: 5 })]) {
+    otherTab((d) => { d.terms[0].name = 'Renamed in the other tab'; d.audit.push({ action: 'update', entity: 'terms' }); });
+    await assert.rejects(write(), (e) => e.status === 409 && /another tab/.test(e.message));
+    assert.equal(saved().terms[0].name, 'Renamed in the other tab', 'the other tab’s save is kept');
+    assert.equal(saved().terms.length, 1); assert.equal(saved().terms[0].deleted_at, null); assert.equal(saved().settings.default_credits, 3);
+  }
+  assert.ok(told >= 5, 'the page is told to reload (and drop its undo history)');
+  assert.equal((await api.all()).terms[0].name, 'Renamed in the other tab', 'this tab now shows the other tab’s version');
+  const p = await api.patch('terms', t.id, { name: 'Now fine' });
+  assert.equal(p.name, 'Now fine', 'the next write (from the fresh copy) works');
+});
+
+test('store (AuthGuard): undo / redo replays on missing, deleted or purged rows fail cleanly, never invent rows', async () => {
+  await api.replace(emptyDoc());
+  const t = await api.create('terms', { name: 'T' });
+  await api.remove('terms', t.id);
+  const again = await api.patch('terms', t.id, { name: 'patched while deleted' }); // undo of an edit after a delete: allowed, stays deleted
+  assert.ok(again.deleted_at, 'a patch never un-deletes');
+  const before = JSON.stringify(saved());
+  for (const op of [() => api.patch('terms', 999, { name: 'x' }), () => api.remove('courses', 999), () => api.restore('assessments', 999),
+    () => api.patch('nope', t.id, {}), () => api.patch('__proto__', t.id, {}), () => api.restore('constructor', 1)]) {
+    await assert.rejects(op(), (e) => e.status === 404);
+  }
+  assert.equal(JSON.stringify(saved()), before, 'a failed replay writes nothing');
+  // Purged (gone for good after 30 days) behaves the same as missing.
+  otherTab((d) => { d.terms = []; });
+  await assert.rejects(api.restore('terms', t.id), (e) => e.status === 409);
+  await assert.rejects(api.restore('terms', t.id), (e) => e.status === 404);
+  assert.equal(saved().terms.length, 0);
+});
+
+test('store (AuthGuard): history entries keep only known kinds; settings entries are whitelisted settings', () => {
+  const d = normalize({ audit: [
+    { action: 'update', entity: 'constructor', before: { name: 'x' } },
+    { action: 'update', entity: '<img src=x onerror=alert(1)>', after: { name: 'y' } },
+    { action: 'update', entity: 'settings', before: { gpa_scale: 'gpa4', evil: 1 }, after: { gpa_scale: '<b>', default_credits: 1e9 } },
+  ] });
+  assert.deepEqual(d.audit.map((a) => a.entity), ['', '', 'settings']);
+  assert.equal(d.audit[0].before, null); assert.equal(d.audit[1].after, null);
+  assert.equal('evil' in d.audit[2].before, false);
+  assert.equal(d.audit[2].after.gpa_scale, 'uwindsor'); assert.equal(d.audit[2].after.default_credits, 3);
+});

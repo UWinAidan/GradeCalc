@@ -11,7 +11,9 @@ its D1 database. GradeCalc starts completely blank. **The GitHub repo is public.
 - `site/` — the static page (plain ES modules, no frameworks, no CDNs). `site/_headers` = CSP + security headers.
   `/` = the calculator (`index.html`, `js/app.js` + `ui.js`, `wizard.js`, `charts.js`, ported from Gradebook);
   `js/store.js` = guest-mode storage (one JSON document in localStorage, same shape an account will sync);
-  `js/demo.js` = made-up demo data. CSS: `css/tokens.css` (Sage Classic tokens, both themes) + `css/app.css` (calculator)
+  `js/demo.js` = made-up demo data;
+  `js/structure.js` = Edit structure helpers without DOM (reorder, duplicate, bulk edit, average previews; Round 3).
+  CSS: `css/tokens.css` (Sage Classic tokens, both themes) + `css/app.css` (calculator)
   or `css/site.css` (About, Privacy). `site/vendor/` = pinned third-party libraries with licence files (SheetJS CE, Round 4).
 - `shared/calc.js` — all grade math (Round 1), used by the page and the tests. `scripts/build.mjs` copies it to
   `site/js/calc.js` (gitignored; wrangler.jsonc `build` runs it before every dev/deploy, ui-check runs it too).

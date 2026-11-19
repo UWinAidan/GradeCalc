@@ -18,8 +18,9 @@
 - [x] All graphs, dark/light, 360 px, print view; letters, course types, repeats, one-level nesting, per-item "what do I need"
 
 ## Round 3 — edit structure
-- [ ] Drag-and-drop + ↑/↓, duplicate, bulk add/edit, average-change preview, delete warnings, undo/redo, history,
-      Recently deleted, move courses, archive terms, live weight check, empty states
+- [x] Drag-and-drop + ↑/↓, duplicate, bulk add/edit, average-change preview, delete warnings, undo/redo, history,
+      Recently deleted, move courses, archive terms, live weight check, empty states (2026-11-19; reviewed by all four agents)
+- [x] Cumulative ⓘ (repeats) and the disclaimer footer on every screen incl. phone term/course views (Aidan, 2026-11-19)
 
 ## Round 4 — files
 - [ ] SheetJS CE vendored (pinned, licence file), Excel export/import, CSV, JSON backup/restore, course templates
@@ -50,3 +51,28 @@
   - Your data: **Load demo data** replaces everything; **Reset everything** clears the gradebook, history and Recently deleted
     but not theme/view choices (clear site data for those). No backup file until Round 4.
   - FAQ: data lost after clearing browser data / private mode; using two tabs at once (they sync); phone vs laptop (separate until accounts).
+- [ ] How to use must also cover (noted by GuideWriter, Round 3):
+  - **Undo** ↶ / **Redo** ↷ in the top bar, and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z (⌘ on a Mac). Not while typing in a box
+    (the box's own undo runs) or with a dialog open. Only for this visit: cleared by a reload, **Load demo data**,
+    **Reset everything** or a change in another tab. Toasts offer **Undo** / **Redo**. A whole setup, duplicate or bulk edit
+    is one step.
+  - **Edit structure** (shows as **Edit** on phones; **Done editing** / **Done** to leave): reorder terms, courses,
+    components, parts and items with **↑** / **↓**; drag the **⠿** handle on a computer.
+  - **Duplicate course…**: pick **Into term**; tick **Copy marks, the final grade and the curve too** or get the structure
+    only. Same term adds "(copy)" to the title. Repeat links aren't copied. Use it for a retake or the same course next term.
+  - **Duplicate** on a component: copies its parts and items with no marks, named "(copy)"; a "final replaces midterm"
+    style rule is dropped from the copy (two components can't take the same weight).
+  - **Bulk add / edit** on a component: one "Name: mark" line each (85, 85%, 17/20 or B+); a blank mark clears it; matching
+    names change marks, new names add items, removed lines delete nothing; **+ 5 numbered lines**; shows the counts and a
+    preview before **Save**.
+  - Previews (labelled "preview") of how the course, term and cumulative averages change: in the **+ Mark** sheet, bulk edit,
+    and the delete warnings for terms, courses, components and marked items. Previews are never saved.
+  - Deleting an item with no mark happens at once (Undo in the toast); everything else asks first. All go to
+    **Recently deleted** for 30 days.
+  - **Archived** checkbox on a term (Edit structure): folds the term under "Archived terms" in the list, **+ Mark** skips its
+    courses, but it still counts in every average and graph.
+  - **History (all changes)** under **More** (last 1000 changes) vs the per-course **History**.
+  - The ⓘ next to **Cumulative average**: why the cumulative can be higher than every year average with repeats (it
+    follows the repeat setting).
+  - FAQ: "I pressed Ctrl+Z and nothing happened" (click outside the text box first; undo doesn't survive a reload);
+    "Does archiving remove a term from my GPA?" (no).

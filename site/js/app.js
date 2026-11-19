@@ -10,6 +10,7 @@ import {
 import { openWizard, guessSeason } from './wizard.js';
 import { bellChart, clusterChart, cumulativeChart, termChart, componentChart } from './charts.js';
 import { demoDoc } from './demo.js';
+import { moveId, sortPatches, copyComponentsPlan, copyCourseBody, remapRefs, bulkText, parseBulk, previewDelta, dropFrom, liveDoc } from './structure.js';
 
 const S = {
   data: null,          // api.all() (live rows only)
@@ -21,6 +22,7 @@ const S = {
   collapsed: new Set(),
   lastCourseId: null,
   ruleDraft: new Map(), // component id → rule type picked but not complete yet
+  info: new Set(),      // open ⓘ explanations
   needUpdate: null,     // refreshes the "what do I need" answers after a render
 };
 
@@ -33,6 +35,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode: fine */ } },
 };
+const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 const parseRule = (r) => { if (!r) return null; if (typeof r === 'object') return r; try { return JSON.parse(r); } catch { return null; } };
 // Curves: item curves are typed as "+2", "×1.1" (or x / *), "=45" in the item's own points (% for items out of 1).
 const itemUnit = (a) => (a.out_of === 1 ? 100 : 1);
@@ -60,19 +63,7 @@ const typeOf = (c) => c.type || 'graded';
 
 // ---------------------------------------------------------------- data
 function recompute() {
-  const d = S.data;
-  const terms = [...d.terms].sort(bySort);
-  const tIds = new Set(terms.map((t) => t.id));
-  const courses = d.courses.filter((c) => tIds.has(c.term_id));
-  const cIds = new Set(courses.map((c) => c.id));
-  const inCourse = d.components.filter((k) => cIds.has(k.course_id));
-  const inIds = new Set(inCourse.map((k) => k.id));
-  const components = inCourse.filter((k) => k.parent_id === null || k.parent_id === undefined || inIds.has(k.parent_id));
-  const kIds = new Set(components.map((k) => k.id));
-  const assessments = d.assessments.filter((a) => kIds.has(a.component_id));
-  const repeats = (d.repeats || []).map((g) => ({ ...g, course_ids: (g.course_ids || []).filter((id) => cIds.has(id)) }))
-    .filter((g) => g.course_ids.length > 1);
-  S.live = { terms, courses, components, assessments, repeats, settings: d.settings };
+  S.live = liveDoc(S.data);
   S.calc = computeAll(S.live);
 }
 const coursesOf = (term) => S.live.courses.filter((c) => c.term_id === term.id).sort(bySort);
@@ -101,7 +92,8 @@ const courseHash = (t, c) => `#/${termSlug(t)}/${courseSlug(c)}`;
 
 function currentTerm() {
   // Latest term with an active course that has marks; then latest with any active course; then the last term.
-  const ts = [...S.live.terms].reverse();
+  const all = [...S.live.terms].reverse();
+  const ts = all.some((t) => !t.archived) ? all.filter((t) => !t.archived) : all;
   const active = (t) => coursesOf(t).filter((c) => c.status === 'active');
   return ts.find((t) => active(t).some((c) => S.calc.courses.get(c.id).result.hasMarks))
     || ts.find((t) => active(t).length) || ts[0] || null;
@@ -138,26 +130,108 @@ async function track(promise) {
   }
 }
 
+// ---------------------------------------------------------------- undo / redo (this tab, this visit)
+// Every saved change is recorded as an operation; changes made together (duplicate, bulk edit, reorder, the wizard)
+// form one step. Undo applies the inverse through the store (a create is undone by a soft delete, so redo restores the
+// same row), and both directions are logged in History like any other change.
+const UNDO_MAX = 100;
+const H = { undo: [], redo: [], tx: null, busy: false, last: null }; // last = the step the latest batch() recorded (or null)
+const ENTITY_WORD = { courses: 'course', components: 'component', assessments: 'item', terms: 'term', repeats: 'repeat link', settings: 'settings' };
+function record(op, label) {
+  if (H.busy) return null;
+  if (H.tx) { if (!H.tx.stale) H.tx.ops.push(op); return H.tx; }
+  const tx = { label, ops: [op] };
+  H.undo.push(tx);
+  if (H.undo.length > UNDO_MAX) H.undo.shift();
+  H.redo = [];
+  undoButtons();
+  return tx;
+}
+/** Run several writes as one undo step. */
+async function batch(label, fn) {
+  if (H.tx) return fn(); // already inside one
+  const tx = { label, ops: [] };
+  H.tx = tx;
+  try { return await fn(); } finally {
+    H.tx = null;
+    // A batch the history was cleared under (another tab changed the gradebook) is never kept: its ids may mean other rows.
+    H.last = tx.ops.length && !tx.stale ? tx : null;
+    if (H.last) { H.undo.push(tx); if (H.undo.length > UNDO_MAX) H.undo.shift(); H.redo = []; }
+    undoButtons();
+  }
+}
+async function applyOp(op, dir) {
+  const back = dir === 'undo';
+  if (op.type === 'patch') return api.patch(op.entity, op.id, back ? op.before : op.after);
+  if (op.type === 'settings') return api.settings(back ? op.before : op.after);
+  const hide = op.type === 'create' || op.type === 'restore' ? back : !back; // create/restore undone = delete again
+  return hide ? api.remove(op.entity, op.id) : api.restore(op.entity, op.id);
+}
+async function stepHistory(dir) {
+  const from = dir === 'undo' ? H.undo : H.redo;
+  if (H.busy || H.tx || !from.length || S.editing) return;
+  const tx = from.pop();
+  H.busy = true;
+  try {
+    // Every row the step touches must still exist (it can't be half applied); otherwise the history is out of date.
+    const doc = api.snapshot();
+    if (tx.ops.some((op) => op.type !== 'settings' && !(doc[op.entity] || []).some((r) => r.id === op.id))) {
+      throw new Error('a row it changes is gone (another tab?). Undo starts fresh');
+    }
+    for (const op of dir === 'undo' ? [...tx.ops].reverse() : tx.ops) await track(applyOp(op, dir));
+    (dir === 'undo' ? H.redo : H.undo).push(tx);
+    toast(`${dir === 'undo' ? 'Undone' : 'Redone'}: ${tx.label}`, dir === 'undo'
+      ? { action: { label: 'Redo', fn: () => { if (H.redo[H.redo.length - 1] === tx) redo(); } } } : {});
+  } catch (e) {
+    H.undo = []; H.redo = []; // the gradebook changed under us (another tab?): start a fresh history
+    toast(`Couldn’t ${dir}: ${e.message}`, { error: true });
+  } finally {
+    H.busy = false;
+    await reload();
+    undoButtons();
+  }
+}
+const undo = () => stepHistory('undo');
+const redo = () => stepHistory('redo');
+function clearUndo() { H.undo = []; H.redo = []; H.last = null; if (H.tx) H.tx.stale = true; undoButtons(); }
+function undoButtons() {
+  const u = $('undo'), r = $('redo');
+  if (!u) return;
+  u.disabled = !H.undo.length; r.disabled = !H.redo.length;
+  u.title = H.undo.length ? `Undo: ${H.undo[H.undo.length - 1].label} (Ctrl+Z)` : 'Nothing to undo';
+  r.title = H.redo.length ? `Redo: ${H.redo[H.redo.length - 1].label} (Ctrl+Y)` : 'Nothing to redo';
+}
+/** A toast's "Undo": the undo stack when this change is still the last step, else `fallback`. */
+const undoAction = (tx, fallback) => ({ label: 'Undo', fn: () => (tx && H.undo[H.undo.length - 1] === tx ? undo() : fallback && fallback()) });
+
 /** Edit a row: recalculates at once, then saves. `row` may be a copy; the stored row is found by id. */
-function patch(entity, row, changes) {
+function patch(entity, row, changes, label) {
+  if (H.tx && H.tx.stale) return Promise.resolve(); // the gradebook changed in another tab part-way through: stop
   const real = S.data[entity].find((r) => r.id === row.id) || row;
   const prev = {};
-  for (const k of Object.keys(changes)) prev[k] = real[k];
+  for (const k of Object.keys(changes)) prev[k] = real[k] === undefined ? null : clone(real[k]);
   Object.assign(real, changes);
   recompute(); render();
   return track(api.patch(entity, real.id, changes))
-    .then((res) => { Object.assign(real, res); })
+    .then((res) => {
+      Object.assign(real, res);
+      if (Object.keys(changes).some((k) => JSON.stringify(prev[k]) !== JSON.stringify(changes[k]))) {
+        record({ type: 'patch', entity, id: real.id, before: prev, after: clone(changes) },
+          label || `edit ${ENTITY_WORD[entity]} ${real.name || real.title || ''}`.trim());
+      }
+    })
     .catch((e) => {
       for (const k of Object.keys(changes)) if (real[k] === changes[k]) real[k] = prev[k];
       toast(`Not saved: ${e.message}`, { error: true });
     })
     .finally(() => { recompute(); render(); });
 }
-
 async function create(entity, body) {
+  if (H.tx && H.tx.stale) return null; // the gradebook changed in another tab part-way through: stop
   try {
     const row = await track(api.create(entity, body));
     S.data[entity].push(row);
+    record({ type: 'create', entity, id: row.id }, `add ${ENTITY_WORD[entity]} ${row.name || row.title || ''}`.trim());
     recompute(); render();
     return row;
   } catch (e) {
@@ -173,14 +247,16 @@ async function removeRow(entity, row, label) {
     toast(`Not deleted: ${e.message}`, { error: true });
     return;
   }
+  const tx = record({ type: 'remove', entity, id: row.id }, `delete ${label}`);
   S.data[entity] = S.data[entity].filter((r) => r.id !== row.id);
   recompute(); render();
-  toast(`Deleted ${label}`, { action: { label: 'Undo', fn: () => restoreRow(entity, row.id, label) } });
+  toast(`Deleted ${label}`, { action: undoAction(tx, () => restoreRow(entity, row.id, label)) });
 }
 
 async function restoreRow(entity, id, label) {
   try {
     await track(api.restore(entity, id));
+    record({ type: 'restore', entity, id }, `restore ${label}`);
     await reload();
     toast(`Restored ${label}`);
   } catch (e) {
@@ -195,11 +271,64 @@ async function reload() {
 
 async function saveSettings(changes) {
   try {
+    const before = clone(S.data.settings);
     S.data.settings = await track(api.settings(changes));
+    if (JSON.stringify(before) !== JSON.stringify(S.data.settings)) record({ type: 'settings', before, after: clone(S.data.settings) }, 'change settings');
     recompute(); render();
   } catch (e) {
     toast(`Not saved: ${e.message}`, { error: true });
   }
+}
+
+// ---------------------------------------------------------------- reorder: ↑/↓ buttons everywhere, drag and drop with a mouse
+let drag = null; // { group, id }: set only by a drag that started on this page, so drops from elsewhere are ignored
+async function reorder(entity, rows, from, to, word) {
+  if (to < 0 || to >= rows.length || from === to) return;
+  const changes = sortPatches(rows, moveId(rows.map((r) => r.id), from, to));
+  const name = rows[from].name || rows[from].title || word;
+  await batch(`move ${name}`, async () => {
+    for (const c of changes) await patch(entity, rows.find((r) => r.id === c.id), { sort_order: c.sort_order });
+  });
+}
+/** ⠿ handle + ↑ ↓ for row `i` of `rows` (stored rows in shown order). `group` keeps drags inside one list. */
+function orderCtl(entity, rows, i, group) {
+  const r = rows[i];
+  const name = r.name || r.title || r.code || '';
+  return h('span', { class: 'order no-print', on: { click: (e) => e.stopPropagation(), keydown: (e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); } } },
+    h('span', { class: 'drag', draggable: 'true', title: 'Drag to reorder', 'aria-hidden': 'true', text: '⠿', on: {
+      dragstart: (e) => { drag = { group, id: r.id }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(r.id)); },
+      dragend: () => { drag = null; for (const x of document.querySelectorAll('.drop')) x.classList.remove('drop'); } } }),
+    h('button', { class: 'btn tiny', type: 'button', 'aria-label': `Move ${name} up`, title: 'Move up', text: '↑', disabled: i === 0,
+      dataset: { k: `order:${entity}:${r.id}:up` }, on: { click: () => reorder(entity, rows, i, i - 1) } }),
+    h('button', { class: 'btn tiny', type: 'button', 'aria-label': `Move ${name} down`, title: 'Move down', text: '↓', disabled: i === rows.length - 1,
+      dataset: { k: `order:${entity}:${r.id}:down` }, on: { click: () => reorder(entity, rows, i, i + 1) } }));
+}
+/** Make `el` a drop spot for row `i` of the same list. */
+function dropSpot(el, entity, rows, i, group) {
+  el.addEventListener('dragover', (e) => { if (drag && drag.group === group) { e.preventDefault(); e.stopPropagation(); el.classList.add('drop'); } });
+  el.addEventListener('dragleave', (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove('drop'); });
+  el.addEventListener('drop', (e) => {
+    if (!drag || drag.group !== group) return;
+    e.preventDefault(); e.stopPropagation();
+    const from = rows.findIndex((x) => x.id === drag.id); // by id: the list may have been redrawn since the drag began
+    drag = null;
+    el.classList.remove('drop');
+    if (from !== -1) reorder(entity, rows, from, i);
+  });
+  return el;
+}
+
+// ---------------------------------------------------------------- previews: how an average would change (never saved)
+/** "Course average 81.20% → 79.05%" lines for the averages a change would move. */
+function deltaLines(d) {
+  const same = (p) => p && (p[0] === p[1] || (p[0] !== null && p[1] !== null && Math.abs(p[0] - p[1]) < 5e-5));
+  const line = (label, p) => (p === undefined ? null : `${label}: ${pct(p[0])} → ${p[1] === null ? 'no grade' : pct(p[1])}${same(p) ? ' (no change)' : ''}`);
+  return [line('Course average', d.course), d.term && !same(d.term) ? line('Term average', d.term) : null,
+    !same(d.cumulative) ? line('Cumulative average', d.cumulative) : null].filter(Boolean);
+}
+function previewBox(d) {
+  const lines = deltaLines(d);
+  return lines.length ? h('div', { class: 'preview small' }, h('span', { class: 'est', text: 'preview' }), lines.map((l) => h('div', { text: l }))) : null;
 }
 
 // ---------------------------------------------------------------- parsers for structure fields
@@ -265,6 +394,26 @@ function thisTermSoFar() {
   const s = t && S.calc.terms.get(t.id);
   return stat('This term so far', s && s.courses ? pct(s.soFar) : '—', t ? `${t.name}, unmarked = 0` : null);
 }
+/** ⓘ button that shows / hides an explanation (S.info remembers which ones are open across re-renders). */
+function infoTip(key, text) {
+  const open = S.info.has(key);
+  const note = h('p', { class: 'info-note small', id: `info-${key}`, hidden: !open, text });
+  const btn = h('button', { class: 'info-btn', type: 'button', 'aria-label': 'What does this mean?', title: text,
+    'aria-expanded': open ? 'true' : 'false', 'aria-controls': note.id, text: 'ⓘ', on: { click: (e) => {
+      e.stopPropagation();
+      if (S.info.has(key)) S.info.delete(key); else S.info.add(key);
+      note.hidden = !S.info.has(key);
+      btn.setAttribute('aria-expanded', S.info.has(key) ? 'true' : 'false');
+    } } });
+  return { btn, note };
+}
+// Follows the default in Settings (one course can override it in Edit structure).
+const CUM_INFO = {
+  best: 'Repeated courses count only your best attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can be higher than every year average.',
+  latest: 'Repeated courses count only your latest attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can differ from every year average.',
+  all: 'Repeated courses count every attempt, in the cumulative and in each year’s average.',
+};
+const cumInfo = () => `${CUM_INFO[S.data.settings.repeat_policy_default] || CUM_INFO.best} Change this in Settings, or for one course in Edit structure.`;
 const est = () => h('span', { class: 'est', title: 'Projection: an estimate, not a grade', text: 'est.' });
 
 function courseBadges(course, cr) {
@@ -316,6 +465,11 @@ function siteFooter() {
     h('div', { class: 'disclaimer', text: 'Not affiliated with or endorsed by the University of Windsor.' }));
 }
 
+/** Small footer for the term, graphs and course panes (phones show one pane at a time, so the Overview footer is hidden). */
+const miniFooter = () => h('footer', { class: 'site mini' },
+  h('span', { text: 'Not affiliated with or endorsed by the University of Windsor.' }), ' ',
+  h('a', { href: '/about', text: 'About' }), ' · ', h('a', { href: '/privacy', text: 'Privacy' }));
+
 // ---------------------------------------------------------------- welcome (nothing yet)
 function renderWelcome() {
   fill(panes.overview);
@@ -346,12 +500,23 @@ function renderOverview(r) {
   const activeTerm = r.shownTerm || r.term;
   const extra = [cum.passCredits ? `${num(cum.passCredits)} pass` : null, cum.transferCredits ? `${num(cum.transferCredits)} transfer` : null].filter(Boolean);
 
-  const termRows = S.live.terms.map((t) => {
+  // Archived terms still count everywhere; they just leave the list (a folded "Archived" list), except in Edit structure.
+  const termRow = (t) => {
     const s = c.terms.get(t.id);
-    return h('li', null, h('a', { class: `row-link${activeTerm && activeTerm.id === t.id ? ' active' : ''}`, href: termHash(t) },
+    const link = h('a', { class: `row-link${activeTerm && activeTerm.id === t.id ? ' active' : ''}`, href: termHash(t) },
       h('span', { class: 'grow' }, t.name, h('span', { class: 'muted small', text: t.year_of_study ? `  Year ${t.year_of_study}` : '' })),
-      h('span', { class: 'num', text: s.courses ? pct(s.average) : '—' })));
-  });
+      t.archived && S.structure ? h('span', { class: 'badge', text: 'archived' }) : null,
+      h('span', { class: 'num', text: s.courses ? pct(s.average) : '—' }));
+    if (!S.structure) return h('li', null, link);
+    const i = S.live.terms.indexOf(t);
+    return dropSpot(h('li', { class: 'ordered' }, orderCtl('terms', S.live.terms, i, 'terms'), link), 'terms', S.live.terms, i, 'terms');
+  };
+  const archived = S.structure ? [] : S.live.terms.filter((t) => t.archived);
+  const termRows = (S.structure ? S.live.terms : S.live.terms.filter((t) => !t.archived)).map(termRow);
+  const archivedList = archived.length ? h('details', { class: 'archived', open: S.info.has('archived') || !!(activeTerm && activeTerm.archived),
+    on: { toggle: (e) => { if (e.target.open) S.info.add('archived'); else S.info.delete('archived'); } } },
+    h('summary', { class: 'small muted', text: `Archived terms (${archived.length}) · still count in averages` }),
+    h('ul', { class: 'list' }, archived.map(termRow))) : null;
 
   fill(panes.overview,
     h('nav', { class: 'side-nav', 'aria-label': 'Main' }, h('ul', { class: 'list' }, h('li', null,
@@ -359,9 +524,13 @@ function renderOverview(r) {
         chartIcon(), h('span', { class: 'grow', text: 'Graphs' }))))),
     h('div', { class: 'pane-head' }, h('h2', { text: 'Overview' }),
       h('span', { class: 'sub small', text: `${cum.courses} graded · ${num(cum.credits)} cr${extra.length ? ` (+ ${extra.join(', ')})` : ''}` })),
-    h('div', { class: 'stats' },
-      stat('Cumulative average', pct(cum.average), gradeFoot(cum.gpa.average, cum.letter.average), 'big'),
-      thisTermSoFar()),
+    (() => {
+      const tip = infoTip('cumulative', cumInfo());
+      return [h('div', { class: 'stats' },
+        h('div', { class: 'stat big' }, h('div', { class: 'label' }, 'Cumulative average ', tip.btn),
+          h('div', { class: 'value', text: pct(cum.average) }), h('div', { class: 'foot', text: gradeFoot(cum.gpa.average, cum.letter.average) })),
+        thisTermSoFar()), tip.note];
+    })(),
     c.yearList.length ? [h('h3', { text: 'Years of study' }),
       h('div', { class: 'years' }, c.yearList.map((y) => {
         const s = c.years.get(y);
@@ -372,13 +541,15 @@ function renderOverview(r) {
       }))] : null,
     h('h3', { text: 'Terms' }),
     h('ul', { class: 'list' }, termRows),
+    archivedList,
     h('div', { class: 'row-actions' },
       h('button', { class: 'btn small primary', type: 'button', text: 'New course (set up)', on: { click: () => newCourseWizard(activeTerm) } }),
       h('button', { class: 'btn small', type: 'button', text: '+ Term', on: { click: () => addTermDialog() } })),
     h('h3', { text: 'More' }),
     h('ul', { class: 'list more' },
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Settings (grade scale, repeats, reset)', on: { click: openSettings } })),
-      h('li', null, h('button', { class: 'link', type: 'button', text: 'Recently deleted', on: { click: openDeleted } }))),
+      h('li', null, h('button', { class: 'link', type: 'button', text: 'Recently deleted', on: { click: openDeleted } })),
+      h('li', null, h('button', { class: 'link', type: 'button', id: 'history-all', text: 'History (all changes)', on: { click: () => openHistory(null) } }))),
     siteFooter(),
   );
 }
@@ -419,16 +590,17 @@ function renderTerm(r) {
   const el = panes.term;
   if (r.graphs) return renderGraphs();
   const term = r.shownTerm;
-  if (!term) { fill(el, h('div', { class: 'empty', text: 'Pick a term.' })); return; }
+  if (!term) { fill(el, h('div', { class: 'empty', text: 'Pick a term.' }), miniFooter()); return; }
   const s = S.calc.terms.get(term.id);
   const courses = coursesOf(term);
   const activeCourse = r.course;
 
-  const rows = courses.map((c) => {
+  const rows = courses.map((c, i) => {
     const cr = S.calc.courses.get(c.id);
     const graded = typeOf(c) === 'graded';
-    return h('tr', { class: `click${activeCourse && activeCourse.id === c.id ? ' active' : ''}`,
+    const tr = h('tr', { class: `click${activeCourse && activeCourse.id === c.id ? ' active' : ''}`,
       on: { click: () => { location.hash = courseHash(term, c); } } },
+    S.structure ? h('td', { class: 'order-cell' }, orderCtl('courses', courses, i, `courses:${term.id}`)) : null,
     h('td', { class: 'code' }, c.code || '—'),
     h('td', { class: 'title-cell' }, h('a', { href: courseHash(term, c), text: c.short_name && isMobile() ? c.short_name : c.title,
       class: 'plain', on: { click: (e) => e.stopPropagation() } }), courseBadges(c, cr)),
@@ -436,6 +608,7 @@ function renderTerm(r) {
     h('td', { class: 'num hide-m', text: graded ? pct(cr.result.soFar) : '—' }),
     h('td', { class: 'num hide-m muted', text: graded ? pct(cr.projected) : '—' }),
     h('td', { class: 'num', text: graded ? gradeCell(cr.gpa.average, cr.letter.average) : '' }));
+    return S.structure ? dropSpot(tr, 'courses', courses, i, `courses:${term.id}`) : tr;
   });
 
   fill(el,
@@ -450,7 +623,7 @@ function renderTerm(r) {
     S.structure ? termStructure(term) : null,
     courses.length
       ? h('table', { class: 'grid' },
-        h('thead', null, h('tr', null, h('th', { text: 'Code' }), h('th', { text: 'Course' }), h('th', { class: 'num', text: 'Average' }),
+        h('thead', null, h('tr', null, S.structure ? h('th', { class: 'order-cell', 'aria-label': 'Order' }) : null, h('th', { text: 'Code' }), h('th', { text: 'Course' }), h('th', { class: 'num', text: 'Average' }),
           h('th', { class: 'num hide-m', text: 'So far' }), h('th', { class: 'num hide-m' }, 'Proj.', est()), h('th', { class: 'num', text: isPoints() ? 'GPA' : 'Letter' }))),
         h('tbody', null, rows))
       : h('div', { class: 'empty' },
@@ -459,6 +632,7 @@ function renderTerm(r) {
     courses.length && !S.structure ? h('p', { class: 'row-actions' },
       h('button', { class: 'btn small', type: 'button', text: 'New course (set up)', on: { click: () => newCourseWizard(term) } })) : null,
     courses.length ? thisTermChart(term) : null,
+    miniFooter(),
   );
 }
 
@@ -535,7 +709,8 @@ function renderGraphs() {
     h('div', { class: 'charts' },
       bellChart(graded.map((g) => ({ label: courseLabel(g.course), name: g.course.title, sub: g.term.name, v: g.result.average }))),
       clusterChart(groups),
-      cumulativeChart({ terms: cumul, years: yearPts, classes })));
+      cumulativeChart({ terms: cumul, years: yearPts, classes })),
+    miniFooter());
 }
 
 /** Need on the final(s) for `target`: the components named "final" that still have unmarked items. */
@@ -586,13 +761,17 @@ function termStructure(term) {
       field('Season', 'terms', term, 'season', { type: 'select', options: [['', '—'], ['Fall', 'Fall'], ['Winter', 'Winter'], ['Spring', 'Spring'], ['Summer', 'Summer']],
         parse: (v) => ({ value: v || null }) }),
       field('Year', 'terms', term, 'year', { parse: numberField(1900, 2100, { nullable: true, int: true, label: 'Year' }), decimal: true }),
-      field('Year of study', 'terms', term, 'year_of_study', { parse: numberField(1, 10, { nullable: true, int: true, label: 'Year of study' }), decimal: true })),
+      field('Year of study', 'terms', term, 'year_of_study', { parse: numberField(1, 10, { nullable: true, int: true, label: 'Year of study' }), decimal: true }),
+      field('Archived', 'terms', term, 'archived', { type: 'checkbox' })),
+    h('p', { class: 'muted small', text: 'Archived terms fold away under “Archived terms” in the list and + Mark skips their courses. They still count in every average and graph.' }),
     h('div', { class: 'row-actions' },
       h('button', { class: 'btn small primary', type: 'button', text: 'New course (set up)', on: { click: () => newCourseWizard(term) } }),
       h('button', { class: 'btn small', type: 'button', text: '+ Course', title: 'Just the name; add components later', on: { click: () => addCourseDialog(term) } }),
       h('button', { class: 'btn small danger', type: 'button', text: 'Delete term', on: { click: async () => {
         const n = coursesOf(term).length;
-        if (await confirmDialog(`Delete ${term.name}?`, `${n ? `Its ${n} course${n === 1 ? '' : 's'} and their marks are hidden with it. ` : ''}You can restore it from Recently deleted for 30 days.`, 'Delete', { danger: true })) {
+        const body = h('div', null, h('p', { text: `${n ? `Its ${n} course${n === 1 ? '' : 's'} and their marks are deleted with it. ` : ''}You can restore it from Recently deleted for 30 days.` }),
+          previewBox(previewDelta(S.live, (d) => dropFrom(d, 'terms', term.id))));
+        if (await confirmDialog(`Delete ${term.name}?`, body, 'Delete', { danger: true })) {
           await removeRow('terms', term, term.name);
           location.hash = '#/';
         }
@@ -603,7 +782,7 @@ function termStructure(term) {
 function newCourseWizard(term) {
   openWizard({
     terms: S.live.terms, term, courses: S.live.courses, compsOf: leavesOf, itemsOf: rawItems, defaultCredits: defaultCredits(),
-    suggestTerm: suggestTermName(), create, patchRow: patch,
+    suggestTerm: suggestTermName(), create, patchRow: patch, batch,
     done: (t, c) => { location.hash = courseHash(t, c); },
   });
 }
@@ -636,7 +815,7 @@ function renderCourse(r) {
   const course = r.course;
   S.needUpdate = null;
   if (!course) {
-    fill(el, h('div', { class: 'empty', text: 'Pick a course to see its marks.' }));
+    fill(el, h('div', { class: 'empty', text: 'Pick a course to see its marks.' }), miniFooter());
     return;
   }
   const term = termOf(course);
@@ -708,11 +887,12 @@ function renderCourse(r) {
       return { label: k.name, weight: c.weight, bonus: !!k.is_bonus, avg: c.average };
     })) : null,
     S.structure ? courseStructure(course) : null,
-    tops.length ? tops.map((k) => (kidsOf(k).length ? groupCard(course, k, res) : compCard(course, k, res))) : h('div', { class: 'empty' },
+    tops.length ? tops.map((k, i) => (kidsOf(k).length ? groupCard(course, k, res, topSib(course, tops, i)) : compCard(course, k, res, false, topSib(course, tops, i)))) : h('div', { class: 'empty' },
       h('p', { text: 'No components yet (e.g. Assignments 20%, Midterm 30%, Final 50%).' }),
       S.structure ? null : h('button', { class: 'btn', type: 'button', text: 'Edit structure', on: { click: () => setStructure(true) } })),
     S.structure ? h('p', null, h('button', { class: 'btn small', type: 'button', text: '+ Component', on: { click: () => addComponent(course) } })) : null,
     course.notes && !S.structure ? h('p', { class: 'muted small', text: course.notes }) : null,
+    miniFooter(),
   );
   if (S.needUpdate) S.needUpdate();
 }
@@ -838,11 +1018,11 @@ function moveCourseRow(course) {
   const move = async (toId, undoable) => {
     const from = termOf(course);
     const to = S.live.terms.find((t) => t.id === toId);
-    await patch('courses', course, { term_id: toId });
+    await patch('courses', course, { term_id: toId }, `move ${courseLabel(course)} to ${to.name}`);
     const now = S.data.courses.find((c) => c.id === course.id);
     if (!now || now.term_id !== toId) return; // not saved (the patch already said why)
     location.hash = courseHash(to, now);
-    if (undoable) toast(`Moved ${courseLabel(course)} to ${to.name}`, { action: { label: 'Undo', fn: () => move(from.id, false) } });
+    if (undoable) toast(`Moved ${courseLabel(course)} to ${to.name}`, { action: undoAction(H.undo[H.undo.length - 1], () => move(from.id, false)) });
   };
   return h('div', { class: 'row-actions move-row' }, h('label', { class: 'field' }, 'Move to term', sel),
     h('button', { class: 'btn small', type: 'button', text: 'Move', on: { click: () => move(Number(sel.value), true) } }));
@@ -901,9 +1081,13 @@ function courseStructure(course) {
       field('Notes', 'courses', course, 'notes', { type: 'textarea', parse: textField('Notes', { max: 2000 }), wide: true })),
     graded ? repeatRow(course) : null,
     moveCourseRow(course),
-    h('p', null, h('button', { class: 'btn small danger', type: 'button', text: 'Delete course', on: { click: async () => {
+    h('p', { class: 'row-actions' },
+      h('button', { class: 'btn small', type: 'button', text: 'Duplicate course…', title: 'Same components and items, e.g. for a retake or a new term', on: { click: () => duplicateCourse(course) } }),
+      h('button', { class: 'btn small danger', type: 'button', text: 'Delete course', on: { click: async () => {
       const n = S.live.assessments.filter((a) => isMarked(a) && rawComps(course).some((k) => k.id === a.component_id)).length;
-      if (await confirmDialog(`Delete ${courseLabel(course)}?`, `${n ? `Its ${n} mark${n === 1 ? '' : 's'} are hidden with it. ` : ''}Restore from Recently deleted for 30 days.`, 'Delete', { danger: true })) {
+      const body = h('div', null, h('p', { text: `${n ? `Its ${n} mark${n === 1 ? ' is' : 's are'} deleted with it. ` : ''}You can restore it from Recently deleted for 30 days.` }),
+        previewBox(previewDelta(S.live, (d) => dropFrom(d, 'courses', course.id), { termId: course.term_id })));
+      if (await confirmDialog(`Delete ${courseLabel(course)}?`, body, 'Delete', { danger: true })) {
         const term = termOf(course);
         await removeRow('courses', course, courseLabel(course));
         if (term) location.hash = termHash(term);
@@ -911,7 +1095,8 @@ function courseStructure(course) {
     } } })));
 }
 
-async function addComponent(course) {
+function addComponent(course) { return batch('add a component', () => addComponentNow(course)); }
+async function addComponentNow(course) {
   const used = topComps(course).filter((k) => !k.is_bonus).reduce((s, k) => s + (Number(k.weight) || 0), 0);
   const row = await create('components', { course_id: course.id, name: 'New component', weight: Math.max(0, Math.min(100, 100 - used)),
     sort_order: Math.max(0, ...rawComps(course).map((k) => k.sort_order ?? 0)) + 1 });
@@ -919,7 +1104,8 @@ async function addComponent(course) {
 }
 
 /** Split a component into parts (one level of nesting). Its items move into the first part. */
-async function addPart(course, k) {
+function addPart(course, k) { return batch(`split ${k.name} into parts`, () => addPartNow(course, k)); }
+async function addPartNow(course, k) {
   const kids = kidsOf(k);
   let order = Math.max(0, ...rawComps(course).map((x) => x.sort_order ?? 0)) + 1;
   let n = kids.length;
@@ -936,7 +1122,7 @@ async function addPart(course, k) {
   S.collapsed.delete(k.id);
 }
 
-function compHead(k, cres, { group = false, child = false } = {}) {
+function compHead(k, cres, { group = false, child = false, sib = null } = {}) {
   const collapsed = S.collapsed.has(k.id);
   const effChanged = !k.is_bonus && !child && Math.abs(cres.weight - k.weight) > 1e-9;
   const wText = child ? `${num(cres.weight)}% of course` : effChanged ? `${num(k.weight)}% → ${num(cres.weight)}%` : `${num(k.weight)}%`;
@@ -945,6 +1131,7 @@ function compHead(k, cres, { group = false, child = false } = {}) {
       click: () => { if (collapsed) S.collapsed.delete(k.id); else S.collapsed.add(k.id); render(); },
       keydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) e.currentTarget.click(); },
     } },
+  S.structure && sib ? orderCtl('components', sib.rows, sib.i, sib.group) : null,
   h('span', { class: 'chev', text: collapsed ? '▸' : '▾' }),
   h('span', { class: 'name' }, editable({ text: k.name, edit: k.name, label: 'Component name', parse: textField('Name', { required: true }),
     save: (v) => patch('components', k, { name: v }) }), group ? h('span', { class: 'muted small', text: `  ${kidsOf(k).length} parts` }) : null),
@@ -953,14 +1140,18 @@ function compHead(k, cres, { group = false, child = false } = {}) {
 }
 
 /** A component split into parts: its own header + the parts inside. */
-function groupCard(course, k, res) {
+function groupCard(course, k, res, sib = null) {
   const cres = res.components.get(k.id) || { weight: k.weight, average: null };
-  const card = h('div', { class: `comp group${k.is_bonus ? ' bonus' : ''}` }, compHead(k, cres, { group: true }));
+  const card = h('div', { class: `comp group${k.is_bonus ? ' bonus' : ''}` }, compHead(k, cres, { group: true, sib }));
+  if (S.structure && sib) dropSpot(card, 'components', sib.rows, sib.i, sib.group);
   if (S.collapsed.has(k.id)) return card;
   if (S.structure) card.append(groupStructure(course, k));
-  card.append(h('div', { class: 'comp-kids' }, kidsOf(k).map((x) => compCard(course, x, res, true))));
+  const kids = kidsOf(k);
+  card.append(h('div', { class: 'comp-kids' }, kids.map((x, i) => compCard(course, x, res, true, { rows: kids, i, group: `parts:${k.id}` }))));
   return card;
 }
+/** Sibling info for a top-level component card (for ↑/↓ and drag). */
+const topSib = (course, rows, i) => ({ rows, i, group: `comps:${course.id}` });
 
 function groupStructure(course, k) {
   const rule = parseRule(k.rule);
@@ -974,33 +1165,37 @@ function groupStructure(course, k) {
     h('p', { class: 'muted small', text: 'The parts share this weight in proportion to their “share” numbers (e.g. 2 and 1 = two thirds and one third).' }),
     h('p', { class: 'row-actions' },
       h('button', { class: 'btn small', type: 'button', text: '+ Part', on: { click: () => addPart(course, k) } }),
+      h('button', { class: 'btn small', type: 'button', text: 'Duplicate', title: 'A copy of this component, its parts and items (no marks)', on: { click: () => duplicateComponent(course, k) } }),
       h('button', { class: 'btn small danger', type: 'button', text: 'Delete component', on: { click: () => deleteComponent(k) } })));
 }
 
 async function deleteComponent(k) {
   const all = [k, ...kidsOf(k)];
   const marks = all.flatMap((x) => rawItems(x)).filter(isMarked);
-  const body = marks.length ? h('div', null, h('p', { text: `These ${marks.length} mark${marks.length === 1 ? '' : 's'} are hidden with it:` }),
+  const body = marks.length ? h('div', null, h('p', { text: `These ${marks.length} mark${marks.length === 1 ? ' is' : 's are'} deleted with it:` }),
     h('ul', { class: 'small' }, marks.slice(0, 12).map((a) => h('li', { text: `${a.name}: ${markText(a)}` })), marks.length > 12 ? h('li', { text: `…and ${marks.length - 12} more` }) : null),
-    h('p', { text: 'Restore from Recently deleted for 30 days.' })) : 'Restore from Recently deleted for 30 days.';
+    h('p', { text: 'You can restore it from Recently deleted for 30 days.' }), previewBox(previewDelta(S.live, (d) => dropFrom(d, 'components', k.id), { courseId: k.course_id })))
+    : 'You can restore it from Recently deleted for 30 days.';
   if (await confirmDialog(`Delete ${k.name}?`, body, 'Delete', { danger: true })) removeRow('components', k, k.name);
 }
 
-function compCard(course, k, res, child = false) {
+function compCard(course, k, res, child = false, sib = null) {
   const cres = res.components.get(k.id) || { weight: k.weight, average: null, soFar: 0 };
   const items = rawItems(k);
   const collapsed = S.collapsed.has(k.id);
   const drops = k.drop_average || k.drop_so_far;
   const rule = parseRule(k.rule);
 
-  const card = h('div', { class: `comp${k.is_bonus ? ' bonus' : ''}${child ? ' child' : ''}` }, compHead(k, cres, { child }));
+  const card = h('div', { class: `comp${k.is_bonus ? ' bonus' : ''}${child ? ' child' : ''}` }, compHead(k, cres, { child, sib }));
+  if (S.structure && sib) dropSpot(card, 'components', sib.rows, sib.i, sib.group);
   if (collapsed) return card;
 
   if (S.structure) {
     card.append(compStructure(course, k, items, child));
     return card;
   }
-  card.append(h('table', { class: 'items' }, h('tbody', null, items.map((a) => itemRow(a)))));
+  card.append(items.length ? h('table', { class: 'items' }, h('tbody', null, items.map((a) => itemRow(a))))
+    : h('p', { class: 'muted small empty-items', text: 'No items yet. Add one below, or paste several with “Bulk add / edit”.' }));
   const notes = [];
   if (!k.is_bonus && Number(k.weight) === 0 && !child) notes.push('0%: shown, not counted');
   if (drops) notes.push(`drops lowest ${k.drop_average === k.drop_so_far ? k.drop_average : `${k.drop_so_far} (so far) / ${k.drop_average} (avg)`}`);
@@ -1020,6 +1215,7 @@ function compCard(course, k, res, child = false) {
     h('button', { class: 'link', type: 'button', text: '+ Add item', on: { click: () => create('assessments', {
       component_id: k.id, name: nextName(k), mark: null, out_of: items[items.length - 1]?.out_of ?? 1,
       sort_order: Math.max(0, ...items.map((a) => a.sort_order ?? 0)) + 1 }) } }),
+    h('button', { class: 'link', type: 'button', text: 'Bulk add / edit', on: { click: () => bulkDialog(course, k) } }),
     notes.length ? h('span', { class: 'muted', text: notes.join(' · ') }) : null));
   return card;
 }
@@ -1104,8 +1300,10 @@ function compStructure(course, k, items, child) {
       field('Projected % (est.)', 'components', k, 'projected', { parse: pctField('Projected'), format: pctOut, placeholder: 'none', decimal: true }),
       h('label', { class: 'field' }, 'Rule', ruleSel), ruleExtra, excusedField(k, others)),
     h('div', { class: 'table-scroll' }, h('table', { class: 'items-struct' },
-      h('thead', null, h('tr', null, ['Item', 'Out of', 'Item weight', 'Counts in', 'Excused', 'Curve', 'Proj. %', ''].map((t) => h('th', { text: t })))),
-      h('tbody', null, items.map((a) => h('tr', null,
+      h('thead', null, h('tr', null, ['', 'Item', 'Out of', 'Item weight', 'Counts in', 'Excused', 'Curve', 'Proj. %', ''].map((t) => h('th', { text: t })))),
+      h('tbody', null, items.length ? null : h('tr', null, h('td', { colspan: '9', class: 'muted small', text: 'No items yet: + Item or Bulk add / edit.' })),
+        items.map((a, i) => dropSpot(h('tr', null,
+        h('td', { class: 'order-cell' }, orderCtl('assessments', items, i, `items:${k.id}`)),
         h('td', null, structInput('assessments', a, 'name', textField('Name', { required: true }))),
         h('td', null, structInput('assessments', a, 'out_of', numberField(0.000001, 1e6, { label: 'Out of' }))),
         h('td', null, structInput('assessments', a, 'item_weight', numberField(0, 1e6, { nullable: true, label: 'Item weight' }))),
@@ -1124,11 +1322,13 @@ function compStructure(course, k, items, child) {
             } } })),
         h('td', null, structInput('assessments', a, 'projected', pctField('Projected'), pctOut)),
         h('td', null, h('button', { class: 'btn small danger', type: 'button', 'aria-label': `Delete ${a.name}`, text: '×',
-          on: { click: () => removeRow('assessments', a, a.name) } }))))))),
+          on: { click: () => deleteItem(course, a) } }))), 'assessments', items, i, `items:${k.id}`))))),
     h('p', { class: 'row-actions' },
       h('button', { class: 'btn small', type: 'button', text: '+ Item', on: { click: () => create('assessments', {
         component_id: k.id, name: nextName(k), mark: null, out_of: items[items.length - 1]?.out_of ?? 1,
         sort_order: Math.max(0, ...items.map((a) => a.sort_order ?? 0)) + 1 }) } }),
+      h('button', { class: 'btn small', type: 'button', text: 'Bulk add / edit', on: { click: () => bulkDialog(course, k) } }),
+      h('button', { class: 'btn small', type: 'button', text: 'Duplicate', title: 'A copy of this component and its items (no marks)', on: { click: () => duplicateComponent(course, k) } }),
       child ? null : h('button', { class: 'btn small', type: 'button', text: 'Split into parts', title: 'e.g. Labs = reports + quizzes', on: { click: () => addPart(course, k) } }),
       h('button', { class: 'btn small danger', type: 'button', text: child ? 'Delete part' : 'Delete component', on: { click: () => deleteComponent(k) } })));
 }
@@ -1172,6 +1372,137 @@ function structInput(entity, row, key, parse, format) {
     } });
 }
 
+// ---------------------------------------------------------------- delete an item, duplicate, bulk add / edit
+/** An unmarked item goes at once (Undo in the toast); a marked one asks first and shows what the average does. */
+async function deleteItem(course, a) {
+  if (isMarked(a)) {
+    const body = h('div', null, h('p', { text: `Its mark (${markText(a)}) is deleted with it. You can restore it from Recently deleted for 30 days.` }),
+      previewBox(previewDelta(S.live, (d) => dropFrom(d, 'assessments', a.id), { courseId: course.id })));
+    if (!(await confirmDialog(`Delete ${a.name}?`, body, 'Delete', { danger: true }))) return;
+  }
+  removeRow('assessments', a, a.name);
+}
+
+/** Create copies of `comps` (with parts and items) in course `toCourseId`; rules point at the copies. */
+async function copyComponents(fromCourse, comps, toCourseId, { withMarks = false, sameCourse = false } = {}) {
+  const all = rawComps(fromCourse);
+  const allIds = new Set(all.map((k) => k.id));
+  const plan = copyComponentsPlan(comps, all, S.live.assessments.filter((a) => allIds.has(a.component_id)), { withMarks });
+  const idMap = new Map(), made = [];
+  let order = sameCourse ? Math.max(0, ...all.map((x) => x.sort_order ?? 0)) : 0;
+  for (const p of plan) {
+    const body = { ...p.body, course_id: toCourseId };
+    const orig = all.find((x) => x.id === p.old);
+    body.parent_id = p.parentOld != null ? idMap.get(p.parentOld) ?? null : sameCourse ? orig.parent_id ?? null : null;
+    if (sameCourse && p.parentOld == null) {
+      body.name = `${p.body.name} (copy)`;
+      body.sort_order = ++order;
+      const rule = parseRule(body.rule);
+      if (rule && rule.type === 'absorb_if_higher') body.rule = null; // the original keeps taking that weight (see remapRefs)
+    }
+    const row = await create('components', body);
+    if (!row) return null;
+    idMap.set(p.old, row.id);
+    made.push({ row, body });
+    for (const it of p.items) if (!(await create('assessments', { ...it, component_id: row.id }))) return null;
+  }
+  for (const { row, body } of made) {
+    const fix = remapRefs(body, idMap, { keepUnmapped: sameCourse, dropUnmappedAbsorb: sameCourse });
+    if (Object.keys(fix).length) await patch('components', row, fix);
+  }
+  return idMap;
+}
+
+function duplicateComponent(course, k) {
+  return batch(`duplicate ${k.name}`, async () => {
+    if (await copyComponents(course, [k], course.id, { sameCourse: true })) toast(`Duplicated ${k.name} (no marks)`);
+  });
+}
+
+function duplicateCourse(course) {
+  const termSel = h('select', { 'aria-label': 'Copy into term' },
+    S.live.terms.map((t) => h('option', { value: String(t.id), text: t.name, selected: t.id === course.term_id })));
+  const marks = h('input', { type: 'checkbox', 'aria-label': 'Copy marks too' });
+  const go = async () => {
+    const to = S.live.terms.find((t) => t.id === Number(termSel.value));
+    if (!to) return;
+    closeDialog('dlg');
+    const withMarks = marks.checked;
+    let row = null;
+    await batch(`duplicate ${courseLabel(course)}`, async () => {
+      const body = copyCourseBody(course, { withMarks });
+      if (to.id === course.term_id) body.title = `${course.title} (copy)`.slice(0, 200);
+      row = await create('courses', { ...body, term_id: to.id, sort_order: Math.max(0, ...coursesOf(to).map((x) => x.sort_order ?? 0)) + 1 });
+      if (row && !(await copyComponents(course, topComps(course), row.id, { withMarks }))) toast('Stopped part-way: Undo removes the copy.', { error: true });
+    });
+    if (!row) return;
+    location.hash = courseHash(to, row);
+    toast(`Duplicated ${courseLabel(course)} into ${to.name}${withMarks ? '' : ' (no marks)'}`, H.last ? { action: undoAction(H.last) } : {});
+  };
+  openDialog('dlg', h('h2', { text: `Duplicate ${courseLabel(course)}` }),
+    h('p', { class: 'muted small', text: 'Copies the course with its components, parts, items and rules. Handy for a retake or the same course next term. Repeat links aren’t copied.' }),
+    h('div', { class: 'form' },
+      h('label', null, 'Into term', termSel),
+      h('label', { class: 'check' }, marks, 'Copy marks, the final grade and the curve too')),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
+      h('button', { class: 'btn primary', type: 'button', id: 'dup-go', text: 'Duplicate', on: { click: go } })));
+}
+
+/** Bulk add / edit: "Name: mark" per line. Matching names get the mark; new names become items; nothing is deleted. */
+function bulkDialog(course, k) {
+  const items = () => rawItems(k);
+  const outOf = items().slice(-1)[0]?.out_of ?? 1;
+  const box = h('textarea', { rows: '10', 'aria-label': 'Items, one per line', spellcheck: 'false', class: 'bulk' });
+  box.value = bulkText(items(), markText);
+  const info = h('div', { class: 'small', role: 'status' });
+  const err = h('div', { class: 'err-msg' });
+  const apply = (d, r) => {
+    for (const u of r.updates) Object.assign(d.assessments.find((x) => x.id === u.item.id), u.changes);
+    r.creates.forEach((c, i) => d.assessments.push({ id: 1e12 + i, component_id: k.id, counts_in: 'both', excused: 0, item_weight: null,
+      curve: null, projected: null, date: null, sort_order: 1e6 + i, ...c }));
+  };
+  const check = () => {
+    const r = parseBulk(box.value, items(), { outOf });
+    err.textContent = r.errors.slice(0, 3).join(' · ') + (r.errors.length > 3 ? ` (+${r.errors.length - 3} more)` : '');
+    if (r.errors.length) { fill(info); return null; }
+    fill(info, h('div', { text: `${r.updates.length} mark${r.updates.length === 1 ? '' : 's'} changed · ${r.creates.length} new item${r.creates.length === 1 ? '' : 's'}` }),
+      r.warnings.length ? h('div', { class: 'warn-text', text: `Check: ${r.warnings.join(', ')}` }) : null,
+      r.updates.length || r.creates.length ? previewBox(previewDelta(S.live, (d) => apply(d, r), { courseId: course.id })) : null);
+    return r;
+  };
+  const addLines = () => {
+    const lines = box.value.split(/\r?\n/).filter((l) => l.trim());
+    const last = lines.length ? lines[lines.length - 1].split(':')[0].trim() : '';
+    const m = /^(.*?)(\d+)$/.exec(last);
+    const base = m ? m[1] : `${k.name.replace(/s$/i, '')} `;
+    let n = m ? Number(m[2]) : lines.length;
+    for (let i = 0; i < 5; i++) lines.push(`${base}${++n}:`);
+    box.value = lines.join('\n');
+    check();
+  };
+  const go = async () => {
+    const r = check();
+    if (!r) return;
+    closeDialog('dlg');
+    if (!r.updates.length && !r.creates.length) return;
+    const start = Math.max(0, ...items().map((a) => a.sort_order ?? 0));
+    await batch(`bulk edit ${k.name}`, async () => {
+      for (const u of r.updates) await patch('assessments', u.item, u.changes);
+      for (const [i, c] of r.creates.entries()) await create('assessments', { component_id: k.id, ...c, sort_order: start + i + 1 });
+    });
+    toast(`${k.name}: ${r.updates.length} changed, ${r.creates.length} added`, H.last ? { action: undoAction(H.last) } : {});
+  };
+  box.addEventListener('input', check);
+  openDialog('dlg', h('h2', { text: `Bulk add / edit: ${k.name}` }),
+    h('p', { class: 'muted small', text: `One item per line: “Name: mark” (85, 85%, 17/20 or B+). A blank mark after “:” clears it. Names that match an item change its mark; new names add items${outOf !== 1 ? ` (out of ${num(outOf)} unless you type x/y)` : ''}. Items you remove from the box are left alone.` }),
+    box, h('p', null, h('button', { class: 'btn small', type: 'button', text: '+ 5 numbered lines', on: { click: addLines } })),
+    info, err,
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
+      h('button', { class: 'btn primary', type: 'button', id: 'bulk-go', text: 'Save', on: { click: go } })));
+  check();
+  box.focus();
+}
+
 // ---------------------------------------------------------------- history drawer
 const SKIP = new Set(['id', 'created_at', 'updated_at', 'version', 'deleted_at']);
 const ENTITY_LABEL = { courses: 'Course', components: 'Component', assessments: 'Item', terms: 'Term', repeats: 'Repeat link', settings: 'Settings' };
@@ -1182,11 +1513,11 @@ function fmtVal(key, v, row) {
   return typeof v === 'object' ? JSON.stringify(v) : String(v);
 }
 async function openHistory(course) {
-  const { entries } = await api.audit({ course_id: course.id, limit: 500 });
+  const { entries } = await api.audit(course ? { course_id: course.id, limit: 500 } : { limit: 500 });
   const list = entries.map((e) => {
     const before = e.before, after = e.after;
     const row = after || before || {};
-    const name = row.name || row.title || `#${e.entity_id}`;
+    const name = e.entity === 'settings' ? '' : row.name || row.title || `#${e.entity_id}`;
     let diff = null;
     if (e.action === 'update' && before && after) {
       diff = Object.keys(after).filter((k) => !SKIP.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
@@ -1196,8 +1527,9 @@ async function openHistory(course) {
     return h('li', null, h('div', { class: 'when', text: when(e.at) }), h('div', null, `${ENTITY_LABEL[e.entity] || e.entity} `, h('b', { text: name }), ` ${verb}`), diff);
   });
   openDialog('drawer',
-    h('div', { class: 'pane-head' }, h('h2', { text: `History · ${courseLabel(course)}` }),
+    h('div', { class: 'pane-head' }, h('h2', { text: course ? `History · ${courseLabel(course)}` : 'History · all changes' }),
       h('div', { class: 'actions' }, h('button', { class: 'btn small', type: 'button', text: 'Close', on: { click: () => closeDialog('drawer') } }))),
+    h('p', { class: 'muted small', text: 'Up to your last 1000 changes in this browser. Undo (↶ or Ctrl+Z) and Redo (↷ or Ctrl+Y) only step through changes made since you opened this page. Deleted terms, courses, components and items can be restored from Recently deleted for 30 days.' }),
     list.length ? h('ul', { class: 'list hist' }, list) : h('p', { class: 'muted', text: 'No changes recorded yet.' }));
 }
 
@@ -1307,6 +1639,7 @@ async function loadDemo() {
   closeDialog('dlg');
   S.data = await track(api.replace(demoDoc()));
   clearViewChoices();
+  clearUndo();
   S.collapsed.clear();
   recompute();
   location.hash = '#/overview';
@@ -1323,6 +1656,7 @@ async function resetAll() {
   if (!ok) return;
   S.data = await track(api.replace(emptyDoc()));
   clearViewChoices();
+  clearUndo();
   S.collapsed.clear();
   setStructure(false);
   recompute();
@@ -1336,7 +1670,7 @@ function markSheet(pref = {}) {
   const recent = store.get('gc-recent-courses', []);
   const ct = currentTerm();
   const graded = (c) => typeOf(c) === 'graded';
-  let pool = S.live.courses.filter((c) => c.status === 'active' && graded(c));
+  let pool = S.live.courses.filter((c) => c.status === 'active' && graded(c) && !termOf(c)?.archived);
   if (!pool.length && ct) pool = coursesOf(ct).filter(graded);
   const termOrder = new Map(S.live.terms.map((t, i) => [t.id, i]));
   pool.sort((a, b) => {
@@ -1370,6 +1704,27 @@ function markSheet(pref = {}) {
   const outIn = h('input', { class: 'big-input', type: 'text', inputmode: 'decimal', placeholder: 'out of', 'aria-label': 'Out of',
     value: outOfDefault !== 1 ? num(outOfDefault) : '' });
   const err = h('div', { class: 'err-msg' });
+  const pv = h('div', { class: 'sheet-preview', role: 'status' });
+  const typed = () => {
+    if (mode === 'pct') {
+      const v = pctIn.value.trim();
+      if (!v) return null;
+      const out = picked ? picked.a.out_of : outOfDefault;
+      return /^[a-f][+-]?$/i.test(v) ? parseMark(v, out) : parseMark(`${v.replace('%', '')}%`, out);
+    }
+    if (!ptsIn.value.trim() || !outIn.value.trim()) return null;
+    return parseMark(`${ptsIn.value}/${outIn.value}`);
+  };
+  const showPreview = () => {
+    const r = typed();
+    if (!r || r.error || (!picked && !newComp)) { fill(pv); return; }
+    fill(pv, previewBox(previewDelta(S.live, (d) => {
+      if (picked) Object.assign(d.assessments.find((x) => x.id === picked.a.id), { mark: r.mark, out_of: r.out_of, letter: r.letter });
+      else d.assessments.push({ id: 1e12, component_id: newComp.id, name: 'new', mark: r.mark, out_of: r.out_of, letter: r.letter,
+        counts_in: 'both', excused: 0, item_weight: null, curve: null, projected: null, sort_order: 1e6 });
+    }, { courseId: course.id, termId: course.term_id })));
+  };
+  for (const i of [pctIn, ptsIn, outIn]) i.addEventListener('input', showPreview);
   let confirmedWarn = null;
   const save = async () => {
     let r;
@@ -1409,7 +1764,7 @@ function markSheet(pref = {}) {
         h('button', { class: 'btn', type: 'button', 'aria-pressed': mode === 'pct' ? 'true' : 'false', text: '% or letter',
           on: { click: () => markSheet({ courseId: course.id, itemKey, mode: 'pct' }) } })),
       mode === 'pct' ? pctIn : h('div', { class: 'pair' }, ptsIn, h('span', { class: 'muted', text: '/' }), outIn),
-      err)
+      pv, err)
       : h('div', null, h('label', { class: 'field' }, 'Course', courseSel), h('p', { class: 'muted', text: 'This course has no components yet. Add them with Edit structure.' })),
     h('div', { class: 'row' },
       h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('sheet') } }),
@@ -1451,7 +1806,7 @@ function setStructure(on) {
   S.structure = on;
   S.ruleDraft.clear();
   $('toggle-structure').setAttribute('aria-pressed', on ? 'true' : 'false');
-  $('toggle-structure').textContent = on ? 'Done editing' : 'Edit structure';
+  fill($('toggle-structure'), h('span', { class: 'long', text: on ? 'Done editing' : 'Edit structure' }), h('span', { class: 'short', text: on ? 'Done' : 'Edit' }));
   render();
 }
 
@@ -1468,6 +1823,19 @@ async function init() {
     try { localStorage.setItem('gc-theme', next); } catch { /* not saved; still switches */ }
   });
   $('toggle-structure').addEventListener('click', () => setStructure(!S.structure));
+  $('undo').addEventListener('click', undo);
+  $('redo').addEventListener('click', redo);
+  undoButtons();
+  // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z (⌘ on a Mac). Inside a text box the browser's own undo runs instead.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !hasData()) return;
+    const k = e.key.toLowerCase();
+    if (k !== 'z' && k !== 'y') return;
+    if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (document.querySelector('dialog[open]')) return;
+    e.preventDefault();
+    if (k === 'z' && !e.shiftKey) undo(); else redo();
+  });
   $('open-settings').addEventListener('click', openSettings);
   $('add-mark').addEventListener('click', () => markSheet());
   $('fab-mark').addEventListener('click', () => markSheet());
@@ -1477,7 +1845,7 @@ async function init() {
   });
   window.addEventListener('hashchange', render);
   mobileQuery.addEventListener('change', render);
-  onExternalChange(() => { reload(); toast('Updated from another tab'); });
+  onExternalChange(() => { clearUndo(); reload(); toast('Updated from another tab. Undo starts fresh.'); });
   try {
     S.data = await api.all();
   } catch (e) {

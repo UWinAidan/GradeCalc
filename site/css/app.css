@@ -381,3 +381,41 @@ footer.site .links { display: flex; flex-wrap: wrap; justify-content: center; ga
   .save-state.ok { display: none; } /* "Saved in this browser" is the normal state; errors still show */
   .topbar { gap: 6px; }
 }
+
+/* Small footer at the end of the term / graphs / course panes. Phones show one pane at a time, so this carries the
+   disclaimer there; on desktop the Overview pane's footer is always on screen. Kept on printouts. */
+footer.site.mini { display: none; margin-top: 28px; padding-bottom: 0; }
+footer.site.mini a { white-space: nowrap; }
+@media (max-width: 899px) { footer.site.mini { display: block; } }
+@media print { footer.site.mini { display: block !important; } }
+
+/* ⓘ explanations */
+.info-btn { background: none; border: 0; padding: 0 2px; color: var(--highlight); cursor: pointer; font-size: 13px; line-height: 1; vertical-align: baseline; }
+.info-btn[aria-expanded="true"] { color: var(--accent); }
+.info-note { background: var(--surface); border-left: 3px solid var(--accent); border-radius: 6px; padding: 6px 10px; margin: 6px 0 0; color: var(--muted); }
+.info-note[hidden] { display: none; }
+
+/* Edit structure, Round 3: reorder (⠿ drag on desktop, ↑ ↓ everywhere), previews, bulk edit, archived terms */
+.order { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.order .drag { cursor: grab; color: var(--muted); padding: 0 3px; user-select: none; font-size: 14px; line-height: 1; }
+.btn.tiny { padding: 0 5px; font-size: 12px; line-height: 18px; border-radius: 6px; }
+.order-cell { width: 1%; white-space: nowrap; }
+.list li.ordered { display: flex; align-items: center; gap: 4px; }
+.list li.ordered .row-link { flex: 1 1 auto; min-width: 0; }
+.drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.preview { background: var(--surface-2); border-radius: 8px; padding: 6px 10px; margin: 8px 0 0; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.preview .est { justify-self: start; }
+.warn-text { color: var(--warn); }
+textarea.bulk { width: 100%; box-sizing: border-box; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+details.archived { margin-top: 4px; }
+details.archived summary { cursor: pointer; padding: 4px 8px; }
+.empty-items { padding: 8px 10px; margin: 0; border-top: 1px solid var(--line); }
+@media (pointer: coarse) { .order .drag { display: none; } }
+@media (max-width: 899px) { .order .drag { display: none; } }
+body.structure table.grid .hide-m { display: none; }
+#toggle-structure .short { display: none; }
+@media (max-width: 899px) { #toggle-structure .long { display: none; } #toggle-structure .short { display: inline; } }
+.items-struct input[data-k$=":name"] { min-width: 9em; }
+.items-struct input[data-k$=":out_of"], .items-struct input[data-k$=":item_weight"], .items-struct input[data-k$=":projected"] { min-width: 3.5em; }
+.items-struct select { min-width: 5.5em; }

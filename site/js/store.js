@@ -110,7 +110,7 @@ export function normalize(raw) {
   d.audit = (Array.isArray(raw.audit) ? raw.audit.slice(-AUDIT_MAX) : []).filter(isPlain).map((a) => ({
     at: typeof a.at === 'string' ? a.at.slice(0, 40) : now(),
     action: ['create', 'update', 'delete', 'restore'].includes(a.action) ? a.action : 'update',
-    entity: typeof a.entity === 'string' ? a.entity.slice(0, 20) : '',
+    entity: own(FIELDS, a.entity) || a.entity === 'settings' ? a.entity : '',
     entity_id: Number.isSafeInteger(a.entity_id) ? a.entity_id : 0,
     course_id: goodId(a.course_id) ? a.course_id : null,
     before: pickAudit(a.entity, a.before), after: pickAudit(a.entity, a.after),
@@ -120,11 +120,13 @@ export function normalize(raw) {
 
 // ---------------------------------------------------------------- persistence
 let doc = null;
+let lastRaw = null; // the stored text this tab last read or wrote: anything else there was written by another tab
 const listeners = new Set();
 
 function read() {
   try {
     const s = localStorage.getItem(KEY);
+    lastRaw = s;
     return s ? normalize(JSON.parse(s)) : emptyDoc();
   } catch {
     return emptyDoc();
@@ -134,9 +136,30 @@ function load() {
   if (!doc) { doc = read(); purge(); }
   return doc;
 }
+/** True (and the document reloaded, listeners told) when another tab saved since this tab last read or wrote. */
+function reloadIfChanged() {
+  let cur;
+  try { cur = localStorage.getItem(KEY); } catch { return false; } // storage blocked: this tab is the only copy
+  if (cur === lastRaw) return false;
+  doc = read();
+  for (const fn of listeners) fn();
+  return true;
+}
+/**
+ * Before every change: the stored document must still be the one this tab has. The `storage` event normally keeps tabs
+ * in step, but it can arrive late or never (a page restored from the back/forward cache). Writing the whole document
+ * from a stale copy would wipe the other tab's changes, and an undo step could hit rows that now mean something else.
+ */
+function loadForWrite() {
+  load();
+  if (reloadIfChanged()) throw new StoreError('The gradebook was changed in another tab. This tab now shows that version; try again.', 409);
+  return doc;
+}
 function write() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(doc));
+    const s = JSON.stringify(doc);
+    localStorage.setItem(KEY, s);
+    lastRaw = s;
   } catch (e) {
     throw new StoreError(e && e.name === 'QuotaExceededError' ? 'This browser’s storage is full' : 'This browser won’t let the page save (private mode?)', 507);
   }
@@ -166,13 +189,15 @@ if (typeof window !== 'undefined') {
     doc = read();
     for (const fn of listeners) fn();
   });
+  // Back/forward cache: storage events that happened while the page was cached are not replayed.
+  window.addEventListener('pageshow', (e) => { if (e.persisted && doc) reloadIfChanged(); });
 }
 export const onExternalChange = (fn) => listeners.add(fn);
 
 // ---------------------------------------------------------------- helpers
 function find(entity, id) {
   if (!own(FIELDS, entity)) throw new StoreError(`Unknown kind: ${entity}`, 404);
-  const row = load()[entity].find((r) => r.id === id);
+  const row = loadForWrite()[entity].find((r) => r.id === id);
   if (!row) throw new StoreError('Not found (deleted in another tab?)', 404);
   return row;
 }
@@ -199,7 +224,7 @@ export const api = {
   },
   async create(entity, body) {
     if (!own(FIELDS, entity)) throw new StoreError(`Unknown kind: ${entity}`, 404);
-    const d = load();
+    const d = loadForWrite();
     const t = now();
     const row = { id: d.next_id++, ...clone(FIELDS[entity]), ...clone(pick(entity, body)), version: 1, created_at: t, updated_at: t, deleted_at: null };
     d[entity].push(row);
@@ -245,7 +270,7 @@ export const api = {
     return { entries: clone(list.slice(-limit).reverse()) };
   },
   async settings(changes) {
-    const d = load();
+    const d = loadForWrite();
     const before = clone(d.settings);
     d.settings = cleanSettings({ ...d.settings, ...(isPlain(changes) ? changes : {}) });
     d.audit.push({ at: now(), action: 'update', entity: 'settings', entity_id: 0, course_id: null, before, after: clone(d.settings) });

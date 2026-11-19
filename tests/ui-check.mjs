@@ -2,6 +2,8 @@
  * 360 px (no sideways scroll), in both themes; header, footer (with the University of Windsor disclaimer) and About links.
  * Then the calculator itself (guest mode): welcome, demo data (numbers checked against calc.js), marks as %, points and
  * letters, "what do I need", Edit structure, wizard, settings, graphs, print, Reset everything, at desktop and 360 px.
+ * Round 3: the disclaimer on every screen, the cumulative ⓘ, reorder + undo / redo (Ctrl+Z, buttons), bulk add / edit
+ * with a preview, the + Mark preview, delete previews, duplicate a course, archive a term.
  * `node tests/ui-check.mjs`. Uses the installed Edge or Chrome (playwright-core), so no browser download. */
 import { chromium } from 'playwright-core';
 import { serve } from './serve.mjs';
@@ -89,6 +91,10 @@ for (const theme of ['dark', 'light']) {
     const overflow = () => page.evaluate(() => Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ...[...document.querySelectorAll('.pane')].filter((p) => p.offsetParent).map((p) => p.scrollWidth - p.clientWidth)));
     const value = (sel) => page.textContent(sel);
+    const disclaimerShown = () => page.evaluate(() => [...document.querySelectorAll('footer.site')]
+      .some((f) => f.getClientRects().length > 0 && f.textContent.includes('Not affiliated with or endorsed by the University of Windsor.')));
+    const compNames = () => page.locator('#pane-course .comp-head .name .ed').allTextContents();
+    const live = (e) => page.evaluate((e) => JSON.parse(localStorage.getItem('gc-gradebook'))[e].filter((r) => !r.deleted_at).length, e);
 
     const res = await page.goto(BASE + '/');
     check(`${tag}: loads`, res.status() === 200);
@@ -105,6 +111,10 @@ for (const theme of ['dark', 'light']) {
     const cum = await value('#pane-overview .stat.big .value');
     check(`${tag}: demo cumulative = calc.js`, cum === pctText(demo.cumulative.average), `${cum} vs ${pctText(demo.cumulative.average)}`);
     check(`${tag}: footer on the overview`, (await value('#pane-overview footer.site')).includes('University of Windsor'));
+    await page.click('#pane-overview .info-btn');
+    check(`${tag}: cumulative ⓘ explains repeats`, await page.isVisible('#pane-overview .info-note')
+      && (await value('#pane-overview .info-note')).includes('Repeated courses count only your best attempt in the cumulative'));
+    check(`${tag}: ⓘ no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
     check(`${tag}: overview no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
 
     // A course in progress (DEMO-2300).
@@ -113,6 +123,17 @@ for (const theme of ['dark', 'light']) {
     await page.waitForSelector('#pane-course .stat.big');
     check(`${tag}: course average = calc.js`, (await value('#pane-course .stat.big .value')) === pctText(demo.courses.get(stats.id).result.average));
     check(`${tag}: course no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    check(`${tag}: disclaimer on the course view`, await disclaimerShown());
+    await page.goto(`${BASE}/#/t${stats.term_id}`);
+    await page.waitForSelector('#pane-term .stat');
+    check(`${tag}: disclaimer on the term view`, await disclaimerShown());
+    await page.goto(`${BASE}/#/t${stats.term_id}/c${stats.id}`);
+    await page.waitForSelector('#pane-course .stat.big');
+    // + Mark: preview of the averages while typing (never saved until Save).
+    await page.click(phone ? '#fab-mark' : '#add-mark');
+    await page.fill('#sheet-pct', '90');
+    check(`${tag}: + Mark shows an average preview`, (await value('#sheet .preview')).includes('Course average'));
+    await page.click('#sheet .row .btn:not(.primary)');
     // Type a mark into the first unmarked item.
     const before = await value('#pane-course .stat.big .value');
     await page.locator('#pane-course tr.unmarked .mark-ed').first().click();
@@ -142,6 +163,88 @@ for (const theme of ['dark', 'light']) {
     await page.click('#toggle-structure');
     check(`${tag}: edit structure shows the weight check`, (await value('#pane-course .wcheck')).startsWith('Weights = 100'));
     check(`${tag}: edit structure no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    // Reorder a component, then Ctrl+Z / redo / undo.
+    const order0 = await compNames();
+    await page.locator('#pane-course .comp-head .order button[title="Move down"]').first().click();
+    await page.waitForTimeout(150);
+    const order1 = await compNames();
+    check(`${tag}: ↓ moves a component`, order1[0] === order0[1] && order1[1] === order0[0], order1.join(','));
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(150);
+    check(`${tag}: Ctrl+Z undoes the move`, (await compNames()).join() === order0.join());
+    await page.click('#redo');
+    await page.waitForTimeout(150);
+    check(`${tag}: redo moves it again`, (await compNames()).join() === order1.join());
+    await page.click('#undo');
+    await page.waitForTimeout(150);
+    check(`${tag}: undo button`, (await compNames()).join() === order0.join());
+    // Bulk add / edit with a preview; one undo step removes what it added.
+    const items0 = await live('assessments');
+    await page.locator('#pane-course .struct button', { hasText: 'Bulk add / edit' }).first().click();
+    await page.fill('#dlg textarea.bulk', (await page.inputValue('#dlg textarea.bulk')) + '\nMade-up extra A: 90\nMade-up extra B: 17/20');
+    await page.dispatchEvent('#dlg textarea.bulk', 'input');
+    check(`${tag}: bulk edit preview`, (await value('#dlg')).includes('2 new items') && (await value('#dlg .preview')).includes('Course average'));
+    await page.click('#bulk-go');
+    await page.waitForTimeout(150);
+    check(`${tag}: bulk edit adds items`, (await live('assessments')) === items0 + 2);
+    await page.click('#undo');
+    await page.waitForTimeout(150);
+    check(`${tag}: one undo removes the bulk add`, (await live('assessments')) === items0);
+    // AuthGuard: a drop that didn't start on this page (another tab / app, any text) changes nothing.
+    await page.evaluate(() => {
+      const dt = new DataTransfer();
+      dt.setData('text/plain', '1');
+      const spot = document.querySelectorAll('#pane-course .comp-head')[1] || document.querySelector('#pane-course .comp-head');
+      for (const type of ['dragover', 'drop']) spot.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+    });
+    await page.waitForTimeout(100);
+    check(`${tag}: a drop from outside the page is ignored`, (await compNames()).join() === order0.join());
+    // AuthGuard: another tab saved and this tab never got the storage event (back/forward cache, or it was late).
+    // Undo must not write this tab's stale copy over it.
+    await page.locator('#pane-course .comp-head .order button[title="Move down"]').first().click();
+    await page.waitForTimeout(150);
+    await page.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('gc-gradebook'));
+      d.settings.default_credits = 4; // setItem in this page fires no storage event here: same as a missed one
+      localStorage.setItem('gc-gradebook', JSON.stringify(d));
+    });
+    await page.click('#undo');
+    await page.waitForTimeout(150);
+    const other = await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).settings.default_credits);
+    check(`${tag}: undo after another tab's save keeps that save`, other === 4 && (await compNames()).join() === order1.join()
+      && await page.isDisabled('#undo'), `credits ${other}, ${(await compNames()).join()}`);
+    await page.locator('#pane-course .comp-head .order button[title="Move up"]:not([disabled])').first().click(); // back to order0
+    await page.waitForTimeout(150);
+    // Delete a component with marks: the warning lists the marks and previews the average.
+    await page.locator('#pane-course .struct button', { hasText: 'Delete component' }).first().click();
+    check(`${tag}: delete warning previews the average`, (await value('#dlg')).includes('deleted with it') && (await value('#dlg .preview')).includes('Course average'));
+    await page.click('#dlg .row .btn:not(.danger)');
+    check(`${tag}: structure tools no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    if (!phone) {
+      // Duplicate the course (structure only), then undo it in one step.
+      const courses0 = await live('courses'), comps0 = (await compNames()).length;
+      await page.locator('#pane-course .struct button', { hasText: 'Duplicate course' }).click();
+      await page.click('#dup-go');
+      await page.waitForFunction(() => document.querySelector('#pane-course h2')?.textContent.includes('(copy)'));
+      check(`${tag}: duplicate course`, (await live('courses')) === courses0 + 1 && (await compNames()).length === comps0
+        && (await value('#pane-course .stat.big .value')) === '—');
+      await page.click('#undo');
+      await page.waitForTimeout(150);
+      check(`${tag}: undo removes the duplicate`, (await live('courses')) === courses0);
+      // Archive a term: it folds away (still counts), and undo brings it back.
+      await page.goto(`${BASE}/#/t${stats.term_id}/c${stats.id}`);
+      await page.waitForSelector('#pane-term .struct');
+      const cumBefore = await value('#pane-overview .stat.big .value');
+      await page.locator('#pane-term .struct label.check', { hasText: 'Archived' }).locator('input').check();
+      await page.click('#toggle-structure');
+      await page.waitForTimeout(100);
+      check(`${tag}: archived term folds away`, (await page.locator('#pane-overview details.archived li').count()) === 1
+        && (await value('#pane-overview .stat.big .value')) === cumBefore);
+      await page.keyboard.press('Control+z');
+      await page.waitForTimeout(150);
+      check(`${tag}: undo un-archives`, (await page.locator('#pane-overview details.archived').count()) === 0);
+      await page.click('#toggle-structure');
+    }
     await page.click('#toggle-structure');
 
     // Graphs.
@@ -149,6 +252,7 @@ for (const theme of ['dark', 'light']) {
     await page.waitForSelector('.chart');
     check(`${tag}: graphs (bell, terms, cumulative)`, (await page.locator('.chart').count()) >= 3);
     check(`${tag}: graphs no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    check(`${tag}: disclaimer on the graphs view`, await disclaimerShown());
 
     if (!phone) {
       // Print view: only the course.

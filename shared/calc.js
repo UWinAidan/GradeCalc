@@ -172,7 +172,19 @@ const hasMarks = (items, view) => items.some((a) => countsIn(a, view) && isMarke
  */
 function effectiveWeights(comps, itemsOf, soFarOf, filled, base) {
   const w = new Map(base);
-  for (const c of comps) {
+  // Chains (Final takes Midterm's weight, Midterm takes Quizzes'): a component settles what it absorbs before anything
+  // absorbs it, so the result never depends on the order the components are listed in (reordering is display only).
+  const byId = new Map(comps.map((c) => [c.id, c]));
+  const order = [], state = new Map();
+  const visit = (c) => {
+    if (state.get(c.id)) return; // done, or on the stack (a loop: keep list order)
+    state.set(c.id, 1);
+    const r = parseRule(c.rule);
+    if (r && r.type === RULES.absorb_if_higher && Array.isArray(r.from)) for (const id of r.from) if (byId.has(id)) visit(byId.get(id));
+    order.push(c);
+  };
+  comps.forEach(visit);
+  for (const c of order) {
     const r = parseRule(c.rule);
     if (!r || r.type !== RULES.absorb_if_higher || !Array.isArray(r.from)) continue;
     if (!(filled ? itemsOf(c).some((a) => countsIn(a, 'so_far')) : hasMarks(itemsOf(c), 'so_far'))) continue;

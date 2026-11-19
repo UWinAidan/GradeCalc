@@ -33,6 +33,40 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
   calculator's full-height pane layout and the content pages' prose layout conflict.
 - **Print:** the course pane only (Print button on a course; `@media print` hides everything else).
 
+## Edit structure (Round 3)
+- **Disclaimer on every screen** (Aidan, 2026-11-19): phones show one pane at a time, so the term, graphs and course
+  panes end with a small footer (disclaimer + About + Privacy). Desktop already shows the Overview footer at all times,
+  so the small one is phone-only (and on printouts).
+- **ⓘ next to the cumulative average** (Aidan, 2026-11-19), text as given: repeats count the best attempt in the
+  cumulative while each year keeps that year's grade, so the cumulative can beat every year average.
+- **Undo / redo = a step list in the page, this visit only.** Every saved change is an operation (patch with before/after,
+  create, delete, restore, settings); multi-row actions (duplicate, bulk edit, reorder, the wizard, split into parts)
+  are one step. Undo writes the inverse through the store, so it shows in History and syncs like any change. A create is
+  undone by a soft delete (redo restores the same row id). Cleared by demo data, Reset everything and changes from
+  another tab (ids could clash). Capped at 100 steps. Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z work outside text boxes; inside a
+  box the browser's own undo runs. History (all changes, last 1000) and Recently deleted (30 days) stay the long-term
+  safety net.
+- **Reorder = `sort_order` renumbered 1..n** for the rows that move (one undo step). ↑/↓ buttons everywhere; drag (⠿)
+  only with a mouse (HTML drag and drop doesn't work on touch). Drags stay inside one list (same term, course or group).
+  Term order is time order: it decides which attempt is "latest" (repeat policy `latest`) and the cumulative-after-each-
+  term graph, so moving a term can change those. Component and item order never change a grade (absorb chains are
+  settled in dependency order, CalcCheck 2026-11-19); only the class candle's open (undated items replay in list order).
+- **Duplicate course** copies components, parts, items and rules into any term (rules re-pointed at the copies).
+  Marks, the final grade, curve and pass/fail result only when "copy marks" is ticked; otherwise the copy is active
+  and blank. Repeat links aren't copied (link the attempts yourself). **Duplicate component** stays in the course, has no
+  marks, and drops a "takes weight of… if higher" rule (the original still takes that weight; two rules competing for
+  one component's weight would make the grade depend on list order). Its parts keep absorb rules only between copied
+  parts (`remapRefs` `dropUnmappedAbsorb`).
+- **Bulk add / edit** = "Name: mark" lines. Names match items case-insensitively; a match changes the mark, a new name
+  adds an item, a missing line changes nothing (bulk edit never deletes). Same mark syntax as everywhere (85, 85%,
+  17/20, B+). Max 300 lines.
+- **Previews ("how would my average change")** re-run `computeAll` on a copy of the gradebook; labelled "preview",
+  never saved. Shown in the + Mark sheet, bulk edit and delete warnings (term, course, component, marked item).
+  Unmarked items delete without a question (Undo in the toast); marked ones ask.
+- **Archived terms** fold under "Archived terms" in the list (all terms in Edit structure) and + Mark skips their
+  courses, but they still count in every average and graph: archiving tidies the list, it doesn't change grades.
+- The pure parts live in `site/js/structure.js` (tests: `tests/structure.test.js`).
+
 ## Data model and sync (planned, Round 5)
 - **One row per user** in `gradebooks`: the whole gradebook as versioned JSON + `version` + `updated_at`. Inside the JSON
   the shape mirrors Gradebook's tables (`terms`, `courses`, `components`, `assessments`), so `calc.js` carries over.

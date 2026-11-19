@@ -53,6 +53,7 @@ export const when = (iso) => {
 export function parseMark(text, outOf = 1) {
   const s = String(text).trim().replace(',', '.');
   if (s === '' || s === '-' || s === '—') return { mark: null, out_of: outOf, letter: null };
+  if (s.length > 40) return { error: 'Too long for a mark' }; // also keeps the patterns below fast on pasted text
   if (/^[a-f][+-]?$/i.test(s)) {
     return letterToPct(s) === null ? { error: 'Letters: A+ to D-, or F' } : { mark: null, out_of: outOf, letter: s.toUpperCase() };
   }
@@ -61,6 +62,7 @@ export function parseMark(text, outOf = 1) {
   else if ((m = s.match(/^(\d*\.?\d+)\s*%$/))) mark = (Number(m[1]) / 100) * outOf;
   else if ((m = s.match(/^\d*\.?\d+$/))) mark = outOf === 1 ? Number(s) / 100 : Number(s);
   else return { error: 'Type 85, 85%, 17/20 or a letter (B+)' };
+  if (!Number.isFinite(mark) || !Number.isFinite(out) || out > 1e6) return { error: 'That number is too big' };
   if (!(out > 0)) return { error: '“Out of” must be more than 0' };
   if (!(mark >= 0)) return { error: 'Mark can’t be negative' };
   const ratio = mark / out;

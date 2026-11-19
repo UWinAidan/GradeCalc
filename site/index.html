@@ -20,7 +20,9 @@
     <span class="save-state" id="save-state" role="status" aria-live="polite"></span>
     <nav class="tools">
       <button type="button" class="btn primary only-desktop needs-data" id="add-mark">+ Mark</button>
-      <button type="button" class="btn needs-data" id="toggle-structure" aria-pressed="false">Edit structure</button>
+      <button type="button" class="btn icon needs-data" id="undo" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+      <button type="button" class="btn icon needs-data" id="redo" aria-label="Redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+      <button type="button" class="btn needs-data" id="toggle-structure" aria-label="Edit structure" aria-pressed="false"><span class="long">Edit structure</span><span class="short">Edit</span></button>
       <button type="button" class="btn icon" id="open-settings" title="Settings" aria-label="Settings">⚙</button>
       <button type="button" class="btn icon" id="toggle-theme" title="Light / dark" aria-label="Switch light or dark theme">◐</button>
     </nav>
