@@ -4,6 +4,7 @@
 // Projections are always labelled and never saved as marks.
 import { computeAll, needFor, needPerItem, parseCurve, curvedMark, itemPct, rawPct, courseCandle, SCALES, letterToPct } from './calc.js';
 import { api, onExternalChange, emptyDoc } from './store.js';
+import * as sync from './sync.js';
 import {
   h, fill, pct, num, when, parseMark, markText, editable, editorHooks, toast, openDialog, closeDialog, confirmDialog,
 } from './ui.js';
@@ -127,7 +128,7 @@ async function track(promise) {
   setSave('', 'Saving…');
   try {
     const r = await promise;
-    if (--inflight === 0) setSave('ok', 'Saved in this browser');
+    if (--inflight === 0) setSave(sync.statusKind(), sync.statusText());
     return r;
   } catch (e) {
     inflight--;
@@ -496,7 +497,8 @@ function renderWelcome() {
       h('p', { class: 'muted small' }, 'Have a backup or a spreadsheet? ',
         h('button', { class: 'link', type: 'button', id: 'welcome-import', text: 'Import a file', on: { click: openFiles } }), '.'),
       h('ul', { class: 'welcome-points' },
-        h('li', { text: 'No account needed. Your marks stay in this browser on this device.' }),
+        h('li', null, 'No account needed: your marks stay in this browser. Want them on every device? ',
+          h('button', { class: 'link', type: 'button', id: 'welcome-signin', text: 'Sign in (optional)', on: { click: openSignIn } }), '.'),
         h('li', { text: 'Grade so far, current average, projected grade and “what do I need”, labelled as projections.' }),
         h('li', { text: 'Drop lowest, bonus marks, curves, excused items, final-replaces-midterm, repeats, pass/fail.' })),
       h('p', { class: 'muted small' }, 'Letters follow the University of Windsor percentage scale by default. Change it in ',
@@ -558,6 +560,7 @@ function renderOverview(r) {
       h('button', { class: 'btn small', type: 'button', text: '+ Term', on: { click: () => addTermDialog() } })),
     h('h3', { text: 'More' }),
     h('ul', { class: 'list more' },
+      h('li', null, h('button', { class: 'link', type: 'button', id: 'more-account', text: inAccount() ? 'Account: sync, download, sign out' : 'Sign in to sync across devices (optional)', on: { click: openAccount } })),
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Settings (grade scale, repeats, reset)', on: { click: openSettings } })),
       h('li', null, h('button', { class: 'link', type: 'button', id: 'open-files', text: 'Files: Excel, CSV, backup, templates', on: { click: openFiles } })),
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Recently deleted', on: { click: openDeleted } })),
@@ -924,8 +927,10 @@ function needBox(course, leaves) {
   if (!open.length) {
     return leaves.length ? h('div', { class: 'need muted' }, 'What do I need? Nothing left to mark.') : null;
   }
-  const key = `gc-need-${course.id}`;
-  const saved = store.get(key, {});
+  const key = viewKey(`need-${course.id}`);
+  // A choice made for another course that had this id (gradebook replaced on another device) doesn't apply.
+  const kept = store.get(key, {});
+  const saved = kept.c && kept.c !== course.created_at ? {} : kept;
   const target = h('input', { type: 'text', inputmode: 'decimal', value: saved.target ?? '', placeholder: '80', 'aria-label': 'Target course grade %', dataset: { k: `need:${course.id}:t` } });
   const parentName = (k) => (k.ancestors && k.ancestors.length ? `${S.live.components.find((x) => x.id === k.ancestors[0])?.name} › ` : '');
   const scope = h('select', { 'aria-label': 'On which marks', dataset: { k: `need:${course.id}:s` } },
@@ -933,7 +938,7 @@ function needBox(course, leaves) {
     open.map((k) => h('option', { value: String(k.id), text: `${parentName(k)}${k.name}`, selected: String(saved.scope) === String(k.id) })));
   const answer = h('span', { class: 'answer' });
   const update = () => {
-    store.set(key, { target: target.value, scope: scope.value });
+    store.set(key, { target: target.value, scope: scope.value, c: course.created_at });
     const t = Number(target.value.replace('%', ''));
     const perItem = panes.course.querySelectorAll('[data-need-item]');
     if (!target.value.trim() || !Number.isFinite(t) || t <= 0 || t > 150) {
@@ -1637,22 +1642,26 @@ function openSettings() {
     h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
       h('button', { class: 'btn primary', type: 'button', text: 'Save', on: { click: save } })),
     h('h3', { text: 'Your data' }),
-    h('p', { class: 'muted small', text: `Stored in this browser only (${kb} KB). Clearing your browser’s site data deletes it: download a backup now and then.` }),
+    h('p', { class: 'muted small', text: inAccount() ? `Saved to your account and kept on this device (${kb} KB). Account: sign out, download or delete everything.` : `Stored in this browser only (${kb} KB). Clearing your browser’s site data deletes it: download a backup now and then. Sign in (optional) to sync across devices.` }),
     h('div', { class: 'row-actions' },
+      h('button', { class: 'btn small', type: 'button', id: 'settings-account', text: inAccount() ? 'Account…' : 'Sign in…', on: { click: () => { closeDialog('dlg'); openAccount(); } } }),
       h('button', { class: 'btn small', type: 'button', id: 'settings-files', text: 'Export / import…', on: { click: openFiles } }),
       h('button', { class: 'btn small', type: 'button', id: 'settings-demo', text: 'Load demo data', on: { click: loadDemo } }),
       h('button', { class: 'btn small danger', type: 'button', id: 'settings-reset', text: 'Reset everything', on: { click: resetAll } })));
 }
 
-/** Per-course view choices ("what do I need" targets, recent courses) belong to the gradebook they were made for. */
+/** Per-course view choices ("what do I need" targets, recent courses) belong to the gradebook they were made for:
+ * the guest gradebook and the account's copy have their own (course ids mean different courses in each). */
+const viewKey = (name) => `${inAccount() ? sync.VIEW_PREFIX : 'gc-'}${name}`;
 function clearViewChoices() {
+  const need = viewKey('need-'), recent = viewKey('recent-courses');
   try {
-    for (const k of Object.keys(localStorage)) if (k.startsWith('gc-need-') || k === 'gc-recent-courses') localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k.startsWith(need) || k === recent) localStorage.removeItem(k);
   } catch { /* storage blocked: nothing to clear */ }
 }
 
 async function loadDemo() {
-  if (hasData() && !(await confirmDialog('Replace your gradebook with demo data?', 'Everything in this browser is replaced by a made-up student’s courses. This can’t be undone.', 'Replace with demo', { danger: true }))) return;
+  if (hasData() && !(await confirmDialog('Replace your gradebook with demo data?', `Everything in ${where()} is replaced by a made-up student’s courses. This can’t be undone.`, 'Replace with demo', { danger: true }))) return;
   closeDialog('dlg');
   S.data = await track(api.replace(demoDoc()));
   clearViewChoices();
@@ -1668,7 +1677,7 @@ async function resetAll() {
   const n = S.live.courses.length;
   const marks = S.live.assessments.filter(isMarked).length;
   const ok = await confirmDialog('Reset everything?',
-    `This deletes ${S.live.terms.length} term(s), ${n} course(s) and ${marks} mark(s) from this browser, plus history and Recently deleted. It can’t be undone. Your theme and view choices stay.`,
+    `This deletes ${S.live.terms.length} term(s), ${n} course(s) and ${marks} mark(s) from ${where()}, plus history and Recently deleted. It can’t be undone. Your theme and view choices stay.`,
     'Delete everything', { danger: true });
   if (!ok) return;
   S.data = await track(api.replace(emptyDoc()));
@@ -1679,7 +1688,245 @@ async function resetAll() {
   recompute();
   location.hash = '#/';
   render();
-  toast('Everything was deleted from this browser.');
+  toast(`Everything was deleted from ${where()}.`);
+}
+
+// ---------------------------------------------------------------- accounts (Round 5): sign in, consent, sync, account
+// Optional. Guest mode never talks to the server. Signed in, the page works on the account's copy in this browser and
+// sync.js sends each saved change to the account. The guest gradebook stays in this browser, untouched.
+const inAccount = () => sync.mode() === 'account';
+const where = () => (inAccount() ? 'your account' : 'this browser');
+const PROVIDER_LABEL = { google: 'Google', microsoft: 'Microsoft' };
+const SIGNIN_NOTICE = {
+  failed: 'Sign-in didn’t work. Try again, or keep using GradeCalc without an account.',
+  cancelled: 'Sign-in cancelled. Nothing changed.',
+  approval: 'Your school’s Microsoft account needs an administrator’s approval for GradeCalc. Sign in with Google instead, or keep using guest mode.',
+  unavailable: 'Sign-in isn’t switched on yet. Everything still works without an account.',
+  offline: 'Couldn’t reach your account (offline?). Your changes are kept on this device and sync when you’re back online.',
+  expired: 'You were signed out. Sign in again to sync.',
+};
+
+function accountButton() {
+  const b = $('account-btn');
+  const signedIn = inAccount() && !sync.isSignedOut();
+  b.setAttribute('aria-label', signedIn ? 'Account' : 'Sign in');
+  b.title = signedIn ? 'Account and sync' : 'Sign in to sync across devices (optional)';
+  b.classList.toggle('on', signedIn);
+}
+
+/** The banner under the top bar for account sync problems (another device saved first; signed out with changes here). */
+function syncBanner() {
+  const b = $('sync-banner');
+  if (sync.hasConflict()) {
+    fill(b, h('strong', { text: 'Updated on another device —' }),
+      h('button', { class: 'btn primary', type: 'button', id: 'sync-theirs', text: 'Use that version', on: { click: async () => {
+        if (await sync.useTheirs()) { clearUndo(); await reload(); syncBanner(); toast('Now showing the version from your other device.'); }
+        else toast('Couldn’t reach your account. Try again in a moment.', { error: true });
+      } } }),
+      h('button', { class: 'btn', type: 'button', id: 'sync-mine', text: 'Keep mine', on: { click: async () => {
+        b.hidden = true; await sync.keepMine(); syncBanner();
+      } } }),
+      h('span', { class: 'muted', text: 'Your changes here weren’t synced. “Keep mine” replaces the other device’s version.' }));
+    b.hidden = false;
+  } else if (sync.isSignedOut()) {
+    const m = sync.readMeta();
+    fill(b, h('strong', { text: 'Signed out —' }),
+      h('a', { class: 'btn primary', href: `/auth/login/${m && m.provider === 'microsoft' ? 'microsoft' : 'google'}`, id: 'sync-signin', text: 'Sign in again' }),
+      // A shared computer: the account's copy must be removable without signing in again.
+      h('button', { class: 'btn', type: 'button', id: 'sync-discard', text: 'Remove from this browser', on: { click: async () => {
+        if (!(await confirmDialog('Remove your account’s gradebook from this browser?', 'Changes made here since the last sync are lost (download a Backup from Files first if you need them). What’s already in your account stays there. This browser’s guest gradebook isn’t touched.', 'Remove', { danger: true }))) return;
+        await sync.signOut({ force: true });
+        location.replace('/');
+      } } }),
+      h('span', { class: 'muted', text: 'Changes on this device aren’t in your account yet. They’re kept here until you sign in.' }));
+    b.hidden = false;
+  } else b.hidden = true;
+}
+
+function openSignIn() {
+  const link = (p) => h('a', { class: `btn big signin-${p}`, href: `/auth/login/${p}`, id: `signin-${p}`, text: `Continue with ${PROVIDER_LABEL[p]}` });
+  openDialog('dlg', h('h2', { text: 'Sign in to sync (optional)' }),
+    h('p', { text: 'With an account your gradebook is saved online, so the same marks show on your phone and laptop. Without one, everything keeps working in this browser.' }),
+    h('div', { class: 'signin-buttons' }, link('google'), link('microsoft')),
+    h('ul', { class: 'muted small files-help' },
+      h('li', { text: 'No password is stored here: Google or Microsoft checks who you are.' }),
+      h('li', { text: 'Google and Microsoft are separate accounts here, even with the same email.' }),
+      h('li', { text: 'Your guest gradebook stays in this browser. After signing in you can save it to your account.' }),
+      h('li', null, 'Before anything is saved you’re asked to agree to what’s stored. See ', h('a', { href: '/privacy', text: 'Privacy' }), '.')),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Not now', on: { click: () => closeDialog('dlg') } })));
+}
+
+/** Consent before the first cloud write. Resolves the start result (agreed) or false (declined: signed out). */
+function consentDialog(me) {
+  return new Promise((resolve) => {
+    const d = $('dlg');
+    const block = (e) => e.preventDefault(); // Esc doesn't dismiss: one of the two answers is needed
+    d.addEventListener('cancel', block);
+    const err = h('div', { class: 'err-msg', role: 'alert' });
+    const finish = (v) => { d.removeEventListener('cancel', block); closeDialog('dlg'); resolve(v); };
+    openDialog('dlg', h('h2', { text: 'Save your gradebook to your account?' }),
+      h('p', { text: `You’re signed in with ${PROVIDER_LABEL[me.account.provider] || 'your account'}${me.account.email ? ` as ${me.account.email}` : ''}. To sync, GradeCalc stores:` }),
+      h('ul', { class: 'consent-list' },
+        h('li', { text: 'your gradebook: terms, courses, marks, settings, history and Recently deleted;' }),
+        h('li', { text: 'your sign-in ID from Google or Microsoft, and your email (shown on your Account page only);' }),
+        h('li', { text: 'a sign-in session for up to 30 days (a random code; only a fingerprint of it is stored).' })),
+      h('p', { class: 'muted small', text: 'It’s kept in a Cloudflare D1 database. Only you can see your gradebook; the site’s admin page shows only counts (accounts, saved gradebooks, sign-ins) and the total storage used. No ads, trackers or analytics. Download or delete everything at any time from Account.' }),
+      h('p', { class: 'muted small' }, 'Details: ', h('a', { href: '/privacy', target: '_blank', rel: 'noopener', text: 'Privacy' }), '.'),
+      err,
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', id: 'consent-no', text: 'No thanks, sign out', on: { click: async () => {
+          await sync.declineConsent(); finish(false);
+        } } }),
+        h('button', { class: 'btn primary', type: 'button', id: 'consent-yes', text: 'I agree', on: { click: async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try { finish(await sync.acceptConsent()); } catch (x) { err.textContent = x.message; btn.disabled = false; }
+        } } })));
+  });
+}
+
+/** The account is empty and this browser has a guest gradebook: offer to save it there ("Save to cloud"). */
+function offerGuestCopy() {
+  const g = sync.guestDoc();
+  if (!g) return;
+  const n = summary(g);
+  openDialog('dlg', h('h2', { text: 'Save this browser’s gradebook to your account?' }),
+    h('p', { text: `This browser has a guest gradebook (${n.terms} term${n.terms === 1 ? '' : 's'}, ${n.courses} course${n.courses === 1 ? '' : 's'}, ${n.marks} mark${n.marks === 1 ? '' : 's'}). Your account is empty.` }),
+    h('p', { class: 'muted small', text: 'It’s copied: the guest gradebook stays in this browser for when you’re signed out. You can also do this later from Account.' }),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', type: 'button', id: 'start-empty', text: 'Start empty', on: { click: () => closeDialog('dlg') } }),
+      h('button', { class: 'btn primary', type: 'button', id: 'save-guest', text: 'Save to my account', on: { click: () => { closeDialog('dlg'); copyGuest('replace'); } } })));
+}
+
+/** A copy of the guest gradebook keeps its ids, so its "what do I need" targets and recent courses still fit it. */
+function copyGuestViewChoices() {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('gc-need-') || k === 'gc-recent-courses') localStorage.setItem(`${sync.VIEW_PREFIX}${k.slice(3)}`, localStorage.getItem(k));
+    }
+  } catch { /* storage blocked: start without them */ }
+}
+
+async function copyGuest(how) {
+  const g = sync.guestDoc();
+  if (!g) { toast('This browser has no guest gradebook.', { error: true }); return; }
+  const prev = api.snapshot();
+  try {
+    S.data = await track(api.replace(how === 'add' ? appendDoc(prev, g) : g, { ifUnchanged: true }));
+  } catch (e) { toast(`Not copied: ${e.message}`, { error: true }); return; }
+  if (how !== 'add') { clearViewChoices(); copyGuestViewChoices(); } // added: the account's courses keep their ids (and targets)
+  clearUndo();
+  recompute();
+  location.hash = '#/overview';
+  render();
+  toast(how === 'add' ? 'Guest gradebook added to your account.' : 'Guest gradebook saved to your account.');
+}
+
+async function openAccount() {
+  if (!inAccount()) { openSignIn(); return; }
+  if (sync.isSignedOut()) { syncBanner(); openSignIn(); return; }
+  const me = await sync.refreshMe();
+  if (!me) { openSignIn(); return; }
+  const m = sync.readMeta() || {};
+  const a = me.account;
+  const g = sync.guestDoc();
+  const gn = g && summary(g);
+  const kb = Math.max(1, Math.round(api.stats().bytes / 1024));
+  const at = (iso) => (iso ? new Date(iso).toLocaleString() : 'not yet');
+  openDialog('dlg', h('h2', { text: 'Account' }),
+    h('p', null, 'Signed in with ', h('strong', { text: PROVIDER_LABEL[a.provider] || a.provider }), a.email ? ` as ${a.email}` : '', '.'),
+    h('p', { class: 'muted small', id: 'account-sync', text: `${sync.statusText()}. Last synced: ${at(m.synced_at)}. About ${kb} KB.` }),
+    h('p', { class: 'muted small', text: `Account since ${new Date(a.created_at).toLocaleDateString()}. Agreed to storage on ${a.consent_at ? new Date(a.consent_at).toLocaleDateString() : '—'}.` }),
+    g ? [h('h3', { text: 'Guest gradebook in this browser' }),
+      h('p', { class: 'muted small', text: `${gn.terms} term${gn.terms === 1 ? '' : 's'}, ${gn.courses} course${gn.courses === 1 ? '' : 's'}, ${gn.marks} mark${gn.marks === 1 ? '' : 's'}. It stays here when you sign out. Adding it keeps your account’s settings (grade scale, repeats).` }),
+      h('div', { class: 'row-actions' },
+        h('button', { class: 'btn small', type: 'button', id: 'guest-add', text: 'Add it to my account', on: { click: () => { closeDialog('dlg'); copyGuest('add'); } } }),
+        h('button', { class: 'btn small', type: 'button', id: 'guest-replace', text: 'Replace my account’s gradebook with it', on: { click: async () => {
+          if (await confirmDialog('Replace your account’s gradebook?', 'Your account’s gradebook becomes a copy of this browser’s guest gradebook, on every device. Undo isn’t available after this.', 'Replace', { danger: true })) copyGuest('replace');
+        } } }))] : null,
+    h('h3', { text: 'Download everything' }),
+    h('div', { class: 'row-actions' },
+      h('a', { class: 'btn small primary', href: '/api/account/export', download: '', id: 'account-export', text: 'Account + gradebook (.json)' }),
+      h('button', { class: 'btn small', type: 'button', text: 'Excel (.xlsx)', on: { click: () => exportFile('xlsx') } })),
+    h('p', { class: 'muted small', text: 'The .json download is your account details and your whole gradebook as stored on the server. A Backup from Files can be imported again.' }),
+    me.admin ? [h('h3', { text: 'Admin' }), h('button', { class: 'btn small', type: 'button', id: 'open-admin', text: 'Accounts and storage', on: { click: openAdmin } })] : null,
+    h('h3', { text: 'Sign out or delete' }),
+    h('div', { class: 'row-actions' },
+      h('button', { class: 'btn small', type: 'button', id: 'sign-out', text: 'Sign out', on: { click: signOut } }),
+      h('button', { class: 'btn small danger', type: 'button', id: 'delete-account', text: 'Delete my account…', on: { click: deleteAccount } })),
+    h('p', { class: 'muted small', text: 'Signing out removes your account’s copy from this browser (after syncing it) and shows the guest gradebook again.' }),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Close', on: { click: () => closeDialog('dlg') } })));
+}
+
+async function signOut() {
+  const r = await sync.signOut();
+  if (r.unsynced) {
+    if (!(await confirmDialog('Sign out without syncing?', 'Your latest changes couldn’t be sent to your account (offline?). Signing out now deletes them from this browser. Download a Backup from Files first if you need them.', 'Sign out anyway', { danger: true }))) return;
+    await sync.signOut({ force: true });
+  }
+  location.replace('/');
+}
+
+async function deleteAccount() {
+  const ok = await confirmDialog('Delete your account and everything in it?',
+    'Your account, its gradebook (on every device), its history and your sign-in sessions are deleted from the server right away. It can’t be undone. This browser’s guest gradebook isn’t touched.',
+    'Delete my account', { danger: true });
+  if (!ok) return;
+  try { await sync.deleteAccount(); } catch (e) { toast(e.message, { error: true }); return; }
+  location.replace('/?signin=deleted');
+}
+
+async function openAdmin() {
+  let s;
+  try { s = await sync.adminStats(); } catch (e) { toast(e.message, { error: true }); return; }
+  const kb = (b) => `${Math.round(b / 1024).toLocaleString()} KB`;
+  openDialog('dlg', h('h2', { text: 'Admin' }),
+    s.label ? h('p', { class: 'muted small', text: s.label }) : null,
+    h('dl', { class: 'admin-stats' },
+      h('dt', { text: 'Accounts' }), h('dd', { id: 'admin-users', text: String(s.users) }),
+      h('dt', { text: 'Google / Microsoft' }), h('dd', { text: `${s.providers.google} / ${s.providers.microsoft}` }),
+      h('dt', { text: 'Gradebooks saved' }), h('dd', { text: String(s.gradebooks) }),
+      h('dt', { text: 'Storage used' }), h('dd', { text: kb(s.bytes) }),
+      h('dt', { text: 'Signed-in sessions' }), h('dd', { text: String(s.active_sessions) })),
+    h('p', { class: 'muted small', text: 'Counts only: this page never shows anyone’s grades or email.' }),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Close', on: { click: () => closeDialog('dlg') } })));
+}
+
+/** A different account used this browser and left changes that never synced: offer them as a backup file. */
+function strayDialog(stray) {
+  openDialog('dlg', h('h2', { text: 'Unsynced changes from another account' }),
+    h('p', { text: `This browser had changes from ${stray.email || 'another account'} that never reached that account. They’re no longer shown here.` }),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', type: 'button', text: 'Discard them', on: { click: () => closeDialog('dlg') } }),
+      h('button', { class: 'btn primary', type: 'button', text: 'Download them (.json)', on: { click: () => {
+        download(`${backupName()}-unsynced.json`, new Blob([JSON.stringify(backupFile(stray.doc), null, 1)], { type: 'application/json' }));
+        closeDialog('dlg');
+      } } })));
+}
+
+/** Before the page reads its data: guest or account, consent, sign-in messages. */
+async function startAccounts() {
+  const r = await sync.init({
+    status: (kind, text) => { if (!inflight) setSave(kind, text); syncBanner(); },
+    remote: () => { clearUndo(); reload(); toast('Updated from your other device.'); },
+    conflict: () => syncBanner(),
+    signedOut: () => { syncBanner(); accountButton(); },
+    // Consent needed again mid-session (consent text changed). "No thanks" signs out: leave the account copy at once.
+    consent: async () => { const me = await sync.refreshMe(); if (me && !(await consentDialog(me))) location.replace('/'); },
+  });
+  let started = r;
+  if (r.mode === 'consent') {
+    const agreed = await consentDialog(r.me);
+    if (agreed) { started = agreed; toast('Signed in. Your gradebook now syncs to your account.'); }
+    else toast('Signed out. Nothing was saved to an account.');
+  } else if (r.mode === 'account' && r.notice === 'ok') {
+    toast('Signed in. Your gradebook syncs to your account.');
+  }
+  if (r.notice === 'deleted') toast('Your account and everything in it were deleted.');
+  else if (SIGNIN_NOTICE[r.notice]) toast(SIGNIN_NOTICE[r.notice], { error: r.notice !== 'cancelled', timeout: 10000 });
+  accountButton();
+  syncBanner();
+  return { stray: r.stray, emptyAccount: !!(started && started.emptyAccount) };
 }
 
 // ---------------------------------------------------------------- files: export / import (Round 4)
@@ -1867,7 +2114,7 @@ function importTemplate({ course, plan }) {
 
 // ---------------------------------------------------------------- + Mark bottom sheet
 function markSheet(pref = {}) {
-  const recent = store.get('gc-recent-courses', []);
+  const recent = store.get(viewKey('recent-courses'), []);
   const ct = currentTerm();
   const graded = (c) => typeOf(c) === 'graded';
   let pool = S.live.courses.filter((c) => c.status === 'active' && graded(c) && !termOf(c)?.archived);
@@ -1938,7 +2185,7 @@ function markSheet(pref = {}) {
     }
     if (r.error) { err.textContent = r.error; return; }
     if (r.warn && confirmedWarn !== `${r.mark}/${r.out_of}`) { confirmedWarn = `${r.mark}/${r.out_of}`; err.textContent = `${r.warn}. Tap Save again to keep it.`; return; }
-    store.set('gc-recent-courses', [course.id, ...recent.filter((id) => id !== course.id)].slice(0, 10));
+    store.set(viewKey('recent-courses'), [course.id, ...recent.filter((id) => id !== course.id)].slice(0, 10));
     closeDialog('sheet');
     if (picked) {
       await patch('assessments', picked.a, r.out_of !== picked.a.out_of ? { mark: r.mark, out_of: r.out_of, letter: r.letter } : { mark: r.mark, letter: r.letter });
@@ -2047,6 +2294,8 @@ async function init() {
   window.addEventListener('hashchange', render);
   mobileQuery.addEventListener('change', render);
   onExternalChange(() => { clearUndo(); reload(); toast('Updated from another tab. Undo starts fresh.'); });
+  $('account-btn').addEventListener('click', openAccount);
+  const acct = await startAccounts();
   try {
     S.data = await api.all();
   } catch (e) {
@@ -2056,7 +2305,9 @@ async function init() {
   recompute();
   render();
   $('loading').remove();
-  setSave('', 'Saved in this browser');
+  setSave(sync.statusKind(), sync.statusText());
+  if (acct.stray) strayDialog(acct.stray);
+  else if (acct.emptyAccount) offerGuestCopy();
 }
 
 init();

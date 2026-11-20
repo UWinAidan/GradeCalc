@@ -6,6 +6,7 @@
  * with a preview, the + Mark preview, delete previews, duplicate a course, archive a term.
  * Round 4: Files (Excel / CSV / JSON export, import replace / add + undo, course templates, a wrong file).
  * A save refused because another tab changed the data shows "Changed in another tab — Reload".
+ * Round 5: accounts end to end (ui-accounts.mjs: the real Worker on SQLite + a fake Google / Microsoft).
  * `node tests/ui-check.mjs`. Uses the installed Edge or Chrome (playwright-core), so no browser download. */
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -13,10 +14,14 @@ import { serve } from './serve.mjs';
 import { build } from '../scripts/build.mjs';
 import { computeAll } from '../shared/calc.js';
 import { demoDoc } from '../site/js/demo.js';
+import { accountEnv, workerHandler, accountChecks } from './ui-accounts.mjs';
 
 build(); // site/js/calc.js = shared/calc.js
 
-const { server, url: BASE } = await serve();
+const env = accountEnv();
+const { server, url: BASE } = await serve({ api: workerHandler(env) });
+// Accounts use http://localhost (a secure context, so the __Host- cookies work); everything else 127.0.0.1.
+env.PUBLIC_ORIGIN = BASE.replace('127.0.0.1', 'localhost');
 let browser;
 for (const channel of ['msedge', 'chrome']) {
   try { browser = await chromium.launch({ channel }); break; } catch { /* try the next browser */ }
@@ -424,6 +429,8 @@ for (const theme of ['dark', 'light']) {
     await ctx.close();
   }
 }
+
+await accountChecks({ browser, check, env, base: env.PUBLIC_ORIGIN });
 
 await browser.close();
 server.close();

@@ -27,10 +27,13 @@
 - [x] ⓘ says "higher or lower"; refused saves show "Changed in another tab — Reload" (Aidan, 2026-11-20)
 
 ## Round 5 — accounts
-- [ ] Google + Microsoft OIDC, sessions, CSRF, rate limits, consent screen, Save to cloud, autosave/offline/conflict
-- [ ] Account page (download JSON/Excel, delete), admin page (count + storage only), AuthGuard isolation tests
-- [ ] **Aidan:** create OAuth apps + `wrangler secret put` (walkthrough then)
-- [ ] Test Microsoft sign-in with a UWindsor account; if admin approval is required → note on sign-in screen + How to use
+- [x] Google + Microsoft OIDC, sessions, CSRF, rate limits, consent screen, Save to cloud, autosave/offline/conflict (2026-11-20)
+- [x] Account page (download JSON/Excel, delete), admin page (count + storage only), AuthGuard isolation tests
+- [ ] **Aidan:** apply the D1 migration, create the Google + Microsoft OAuth apps, `wrangler secret put` (README "Accounts setup")
+- [ ] **Aidan:** sign in with Google once → read your `sub` → `wrangler secret put ADMIN_SUB`
+- [ ] Test Microsoft sign-in with a UWindsor account; if admin approval is required → keep the "use Google" message
+      (already shown on that error) and add a line to the sign-in dialog + How to use
+- [ ] Check the live site after deploy: sign in with both providers, sync between two devices, delete account
 
 ## Round 6 — guide + PWA
 - [ ] How to use (5 steps, every field, worked example, searchable FAQ; note that other schools may count the "latest attempt" and how to change the repeat policy), Privacy page final, manifest + service worker, launch
@@ -109,3 +112,57 @@
     tab open to avoid it); "How do I move my grades to another browser or computer?" (Backup (.json) → Import → Replace);
     "Is my file uploaded anywhere?" (no); "Can I share my course setup without my marks?" (Save as template);
     "Why did my rules / curves disappear after a CSV import?" (CSV doesn't hold them; use Excel or the backup).
+- [ ] How to use must also cover (noted by GuideWriter, Round 5):
+  - Signing in is optional. Where to find it: the person icon in the top bar (label **Sign in**, then **Account** once
+    signed in); the welcome screen link **Sign in (optional)**; **More** → **Sign in to sync across devices (optional)**
+    (signed in: **Account: sync, download, sign out**); **Settings** → **Sign in…** (signed in: **Account…**).
+  - Sign-in dialog **Sign in to sync (optional)**: **Continue with Google**, **Continue with Microsoft**, **Not now**.
+    Notes on it: no password is stored; Google and Microsoft are separate accounts here, even with the same email; the
+    guest gradebook stays in this browser.
+  - Consent screen **Save your gradebook to your account?** lists what's stored (gradebook; sign-in ID and email; a
+    30-day sign-in session). **I agree** or **No thanks, sign out** (Esc doesn't skip it). Toasts: "Signed in. Your
+    gradebook now syncs to your account." / "Signed out. Nothing was saved to an account."
+  - First sign-in with an empty account and a guest gradebook here: **Save this browser’s gradebook to your account?** →
+    **Save to my account** (a copy; the guest one stays) or **Start empty**. Later from **Account** → "Guest gradebook in
+    this browser": **Add it to my account** (its terms go after yours) or **Replace my account’s gradebook with it**
+    (asks first; no Undo after).
+  - The save note in the top bar: "Saved in this browser" (guest); signed in: "Saved to your account", "Saving to your
+    account…", "Offline: saved on this device, will sync", "Not synced: changed on another device", "Signed out: changes
+    kept on this device", "Not synced: too big for an account (see Account)" (about 1.5 MB), "Not synced yet: will try again".
+  - Changes save about 2 seconds after you make them and work offline (sent when you're back online). Changes from your
+    other device show up when you come back to the tab: toast "Updated from your other device."
+  - Banner **Updated on another device —** **Use that version** (drops this device's unsynced changes) / **Keep mine**
+    (replaces the other device's version). "Your changes here weren’t synced." Not the same as the Round 4 banner
+    **Changed in another tab — Reload** (two tabs in one browser).
+  - Banner **Signed out —** **Sign in again**: "Changes on this device aren’t in your account yet. They’re kept here until
+    you sign in."
+  - **Account** dialog: "Signed in with Google/Microsoft as …", sync state, "Last synced", size in KB, "Account since",
+    "Agreed to storage on"; **Download everything**: **Account + gradebook (.json)** (account details + whole gradebook
+    from the server; for keeping, not for Import) and **Excel (.xlsx)**; **Sign out**; **Delete my account…**; **Close**.
+    Admin only: **Accounts and storage** (counts only).
+  - **Sign out**: syncs first, then removes the account's copy from this browser and shows the guest gradebook again. If
+    it can't sync: **Sign out without syncing?** → **Sign out anyway** deletes those changes here (download a Backup first).
+  - **Delete my account…** → **Delete your account and everything in it?** → **Delete my account**: account, gradebook
+    (every device) and sign-in sessions go from the server at once; can't be undone; the guest gradebook stays. Toast "Your
+    account and everything in it were deleted." **Reset everything** while signed in empties the account's gradebook but
+    keeps the account.
+  - Dialog **Unsynced changes from another account** (someone else's unsynced changes on a shared browser): **Download them
+    (.json)** or **Discard them**.
+  - Sign-in messages (toasts): "Sign-in didn’t work. Try again, or keep using GradeCalc without an account."; "Sign-in
+    cancelled. Nothing changed."; "Your school’s Microsoft account needs an administrator’s approval for GradeCalc. Sign
+    in with Google instead, or keep using guest mode."; "Sign-in isn’t switched on yet. Everything still works without an
+    account."; "Couldn’t reach your account (offline?). …"; "You were signed out. Sign in again to sync." (sessions last 30
+    days).
+  - FAQ: "Do I need an account?" (no; guest mode does everything, an account only syncs devices); "Where is my data when
+    I'm signed in?" (Cloudflare D1 + a copy in this browser; only you can see it; see Privacy); "My school Microsoft
+    account asks for admin approval" (your school blocks new apps; use Google or guest mode); "I signed in with Google on my
+    phone and Microsoft on my laptop and my marks are missing" (separate accounts, never joined by email; use the same
+    one); "Updated on another device — which do I pick?" (Use that version if the other device has the newer work; Keep
+    mine if this one does; or download a Backup first, pick one, then re-enter the few missing marks); "What happens to my
+    guest gradebook when I sign in / out?" (it stays in this browser untouched; you can copy it to your account; signing out
+    shows it again); "Does my phone see my marks without internet?" (yes, the last synced copy; changes sync later); "Why
+    does it say Signed out?" (30-day session ended; Sign in again, nothing here is lost); "How do I delete everything?"
+    (Account → Delete my account… for the server and this browser's account copy; Settings → Reset everything for the
+    guest gradebook; clear site data for theme and view choices; Cloudflare's own recovery copies go within 30 days);
+    "How do I get a copy of my data?" (Account → Account + gradebook (.json), or Files → Backup (.json) to import later);
+    "Can the site owner see my grades?" (no; the admin page has counts only).

@@ -23,6 +23,7 @@
       <button type="button" class="btn icon needs-data" id="undo" aria-label="Undo" title="Undo (Ctrl+Z)" disabled>↶</button>
       <button type="button" class="btn icon needs-data" id="redo" aria-label="Redo" title="Redo (Ctrl+Y)" disabled>↷</button>
       <button type="button" class="btn needs-data" id="toggle-structure" aria-label="Edit structure" aria-pressed="false"><span class="long">Edit structure</span><span class="short">Edit</span></button>
+      <button type="button" class="btn icon" id="account-btn" title="Sign in to sync across devices (optional)" aria-label="Sign in"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="5.2" r="2.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2.6 14c.6-2.9 2.8-4.4 5.4-4.4s4.8 1.5 5.4 4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
       <button type="button" class="btn icon" id="open-settings" title="Settings" aria-label="Settings">⚙</button>
       <button type="button" class="btn icon" id="toggle-theme" title="Light / dark" aria-label="Switch light or dark theme">◐</button>
     </nav>
@@ -33,6 +34,7 @@
     <button type="button" class="btn primary" id="conflict-reload">Reload</button>
     <span class="muted">Your last change wasn’t saved.</span>
   </div>
+  <div class="conflict no-print" id="sync-banner" role="alert" hidden></div>
 
   <main class="panes">
     <section class="pane pane-overview" id="pane-overview" aria-label="Overview"></section>

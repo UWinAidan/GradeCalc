@@ -24,11 +24,12 @@
 </header>
 <main class="prose">
   <h1>Privacy</h1>
-  <p class="muted">Last updated 2026-11-20.</p>
-  <div class="note" id="privacy-status">Right now GradeCalc works without an account only. Everything you type stays in your own
-    browser on this device. Nothing is sent to a server, and there are no cookies.</div>
+  <p class="muted">Last updated 2026-11-20 (accounts).</p>
+  <div class="note" id="privacy-status">GradeCalc works fully without an account: then everything you type stays in your own
+    browser on this device and nothing is sent to a server. Signing in with Google or Microsoft is optional and only adds
+    syncing between your devices.</div>
 
-  <h2>Without an account (now)</h2>
+  <h2>Without an account</h2>
   <ul>
     <li><b>Where your grades are:</b> in your browser's local storage for this site (localStorage), on this device only.
       The page never sends them anywhere. Other people, and the site owner, can't see them.</li>
@@ -50,16 +51,58 @@
       only loads when you download or import an Excel file.</li>
   </ul>
 
-  <h2>With an account (coming soon, optional)</h2>
-  <p>Accounts don't exist yet. This is the plan, and this page will be updated before they go live.</p>
+  <h2>With an account (optional)</h2>
   <ul>
-    <li>You will sign in with Google or Microsoft. GradeCalc will never see or store a password.
-      Before anything is saved to the cloud, you will see a consent screen explaining what is stored.</li>
-    <li><b>What will be stored for an account:</b> your sign-in provider and its account ID, your email and name as the provider reports them,
-      your gradebook, and when you accepted the consent screen.</li>
-    <li><b>Where:</b> Cloudflare (Workers and the D1 database).</li>
-    <li><b>Who can see your grades:</b> only you. The site owner's admin view will show only the number of users and total storage used, never anyone's grades.</li>
-    <li><b>Your control:</b> you will be able to download your data (JSON or Excel) or delete your account and all its data at any time.</li>
+    <li><b>Signing in:</b> with Google or Microsoft (a personal or a school/work Microsoft account). GradeCalc never sees
+      or stores a password. Google or Microsoft will know you signed in to GradeCalc (their own privacy policies apply to
+      that). Google and Microsoft are separate accounts here, even with the same email: accounts are never joined by email.</li>
+    <li><b>Consent first:</b> signing in creates only your account details (the list below, without a gradebook) and a
+      sign-in session. Your gradebook is not saved to your account until you press <b>I agree</b> on the consent screen.
+      <b>No thanks, sign out</b> signs you out; if the account has no saved gradebook yet, it is deleted at once.
+      If the consent text ever changes, you're asked again before anything more is saved.</li>
+    <li><b>What is stored for an account:</b>
+      <ul>
+        <li>your gradebook (terms, courses, marks, settings, change history and Recently deleted), the same document guest
+          mode keeps in your browser, with its size, a version number and when it was last saved. Each save replaces the
+          last one; GradeCalc keeps no older versions;</li>
+        <li>which provider you used and its account ID for you (Google's account ID; Microsoft's directory and object IDs);</li>
+        <li>your email as the provider reports it, shown only to you (on the consent screen and your Account page) and
+          never used to find or join accounts;</li>
+        <li>when the account was created, when you last signed in, and which consent text you agreed to and when;</li>
+        <li>sign-in sessions: a random code in a cookie (<code>__Host-gc-session</code>, HttpOnly, Secure, 30 days). Only a
+          fingerprint (SHA-256) of the code is stored, never the code itself, with a second random code that protects your
+          saves from forgery, and when the session started and ends. At most 10 sessions per account (the oldest go).</li>
+      </ul>
+      Your name and profile picture are not stored. Your theme and view choices are never sent: they stay in this browser.</li>
+    <li><b>Cookies:</b> only when you sign in: the session cookie above, and a short-lived one (<code>__Host-gc-signin</code>,
+      10 minutes) while you're signing in, to protect the sign-in from forgery. No other cookies, and none in guest mode.</li>
+    <li><b>Where:</b> Cloudflare (a Worker and the D1 database for this site).</li>
+    <li><b>In this browser while signed in:</b> a copy of your account's gradebook (kept apart from your guest gradebook)
+      and a small note for syncing (your account number, provider, email, the version and whether there are changes not
+      yet synced), so the page works offline. Changes made offline are sent when you're back online.</li>
+    <li><b>After you sign out:</b> the account's copy and that note are removed from this browser (your changes are synced
+      first; if they can't be, you're asked before they're thrown away). Your guest gradebook, theme and view choices stay.
+      If your session ends by itself while this browser has unsynced changes, they're kept here until you sign in again, or until you press <b>Remove from this browser</b> in the
+      "Signed out" banner (for a shared computer).
+      If a different account signs in on this browser first, it's offered those changes as a download, then they're removed.</li>
+    <li><b>Who can see your grades:</b> only you. The site owner's admin page shows only the number of accounts (per
+      provider), the number of saved gradebooks, total storage used and the number of signed-in sessions, never anyone's
+      grades or email.</li>
+    <li><b>Your control:</b> <b>Account</b> (the person icon in the top bar) →
+      <ul>
+        <li><b>Account + gradebook (.json)</b>: your account details (provider, email, dates, consent) and your whole
+          gradebook as stored on the server; or <b>Excel (.xlsx)</b>;</li>
+        <li><b>Sign out</b>;</li>
+        <li><b>Delete my account…</b>: deletes the account, its gradebook and every sign-in session from the server right
+          away, and the account's copy from this browser. It can't be undone.</li>
+      </ul>
+      Your guest gradebook in this browser isn't touched by any of this. <b>Settings</b> → <b>Reset everything</b> while
+      signed in empties your account's gradebook (on every device) but keeps the account.</li>
+    <li><b>Backups at Cloudflare:</b> Cloudflare's database keeps its own short-term recovery history (up to 30 days), so
+      deleted or changed data disappears from that history within 30 days. It's used only to repair the database.</li>
+    <li><b>Limits and logs:</b> requests are rate limited per IP address and per account to stop abuse. A gradebook can be
+      up to about 1.5 MB. Cloudflare keeps short-term request logs (for example the time, IP address and the page asked
+      for); GradeCalc's own error log never includes your grades, email or sign-in codes.</li>
   </ul>
 
   <h2>Always</h2>

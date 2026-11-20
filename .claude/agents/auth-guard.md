@@ -21,7 +21,8 @@ You are **AuthGuard**. Anyone on the internet can use GradeCalc, so assume every
 6. **Input:** JSON body size cap, schema/version checks, optimistic version check (409 on stale `base_version`).
 7. **Consent:** no cloud write before the current consent version is accepted; accepted version + date stored.
 8. **Delete account:** real delete of the user, gradebook, consents and sessions; a second request with the old cookie → 401.
-9. **Admin:** only a Google sign-in whose verified email equals `ADMIN_EMAIL`; returns user count + storage size only —
+9. **Admin:** only a Google sign-in whose subject (`sub`) equals the `ADMIN_SUB` secret (`ADMIN_EMAIL` is a label only);
+   returns user count + storage size only —
    grep the admin code path to prove it never selects the gradebook JSON.
 10. **Secrets:** OAuth client secrets only via `wrangler secret put` (never in git, `.dev.vars` ignored); no secrets or
     tokens in logs or error responses.

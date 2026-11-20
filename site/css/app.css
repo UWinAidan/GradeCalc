@@ -369,6 +369,25 @@ footer.site .links { display: flex; flex-wrap: wrap; justify-content: center; ga
 }
 
 /* Print: the course on its own (marks, components, results). */
+/* Accounts (Round 5): top-bar account button, sign-in, consent, admin */
+#account-btn { display: inline-flex; align-items: center; justify-content: center; }
+#account-btn .nav-icon { color: currentColor; vertical-align: middle; }
+#account-btn.on { border-color: var(--accent); color: var(--accent); }
+.signin-buttons { display: grid; gap: 8px; margin: 12px 0; }
+.signin-buttons .btn { text-align: center; text-decoration: none; }
+.consent-list { margin: 8px 0; padding-left: 20px; display: grid; gap: 4px; }
+.admin-stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 8px 0; }
+.admin-stats dt { color: var(--muted); }
+.admin-stats dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+a.btn { text-decoration: none; display: inline-block; }
+/* Long labels in dialogs and banners wrap instead of pushing the page sideways on a phone. */
+.dlg .row-actions .btn, .signin-buttons .btn, .conflict .btn { white-space: normal; text-align: center; }
+@media (max-width: 420px) {
+  body.depth-0 .brand span { display: none; } /* room for the account button */
+  .tools { gap: 4px; }
+  .tools .btn.icon { padding: 5px 7px; }
+}
+
 @media print {
   :root { --bg: #fff; --surface: #fff; --surface-2: #f4f4f4; --text: #000; --muted: #444; --line: #bbb; }
   html, body { height: auto; overflow: visible; }

@@ -20,10 +20,20 @@
     { "binding": "gradecalc", "database_name": "gradecalc", "database_id": "3c304d47-db95-46d4-80ab-c55ccd9facc1", "migrations_dir": "migrations" }
   ],
 
-  // Not secret.
+  // Not secret. PUBLIC_ORIGIN fixes the OAuth redirect URIs and the allowed Origin for writes (.dev.vars overrides it
+  // locally). ADMIN_EMAIL is only a label on the admin page: admin = a Google sign-in whose subject is the ADMIN_SUB secret.
   "vars": {
+    "PUBLIC_ORIGIN": "https://gradecalc.aidanwbrown.com",
     "ADMIN_EMAIL": "4aidanbrown@gmail.com"
   },
+
+  // Rate limits (per Cloudflare location, 60 s windows): sign-in per IP, API per IP and per user, writes per user.
+  // A missing binding fails closed (the Worker answers 429).
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1501", "simple": { "limit": 20, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1502", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_WRITE", "namespace_id": "1503", "simple": { "limit": 60, "period": 60 } }
+  ],
 
   "observability": { "enabled": true },
 

@@ -1,7 +1,12 @@
 # Copy to .dev.vars for `npm run dev` (ignored by git). In production these are `npx wrangler secret put <NAME>`.
-# Filled in from Round 5 (accounts).
+# SESSION_SECRET: 32+ random bytes, e.g. node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 SESSION_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 MICROSOFT_CLIENT_ID=
 MICROSOFT_CLIENT_SECRET=
+# Admin page: your Google account's subject id (users.subject after your first Google sign-in).
+ADMIN_SUB=
+# Local only (production uses the var in wrangler.jsonc). Add http://localhost:8787/auth/callback/<provider> to the
+# OAuth apps' redirect URIs if you want to sign in locally.
+PUBLIC_ORIGIN=http://localhost:8787

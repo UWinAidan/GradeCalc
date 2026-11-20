@@ -1,11 +1,13 @@
-// Guest mode: the whole gradebook is one JSON document in this browser's localStorage. Nothing is sent anywhere.
+// The whole gradebook is one JSON document in this browser's localStorage. Guest mode: key gc-gradebook, never sent
+// anywhere. Signed in (Round 5): key gc-cloud-doc, and sync.js sends each saved change to the account (onWrite).
 // The document mirrors Gradebook's tables (terms, courses, components, assessments) plus repeats and settings, so
-// calc.js reads it directly. It is the same document an account will sync later (Round 5).
+// calc.js reads it directly.
 // `api` has the same shape as Gradebook's server API (create / patch / remove / restore / deleted / audit), so the page
 // code works the same way. Deletes are soft (deleted_at) so "Recently deleted" can restore them; history is an audit
 // list inside the document. Both are capped.
 
-const KEY = 'gc-gradebook';
+export const GUEST_KEY = 'gc-gradebook';
+let KEY = GUEST_KEY;
 const SCHEMA = 1;
 const AUDIT_MAX = 1000;
 const DELETED_DAYS = 30;
@@ -79,7 +81,9 @@ function cleanSettings(raw) {
     const bands = cs.bands.filter(isPlain).map((b) => ({
       min: Math.min(1.5, Math.max(0, Number(b.min) || 0)), letter: String(b.letter ?? '').slice(0, 4),
       points: b.points === null || b.points === undefined || !Number.isFinite(Number(b.points)) ? null : Number(b.points) }));
-    s.custom_scale = { name: 'Custom', kind: cs.kind === 'percent' ? 'percent' : 'points', max: Number.isFinite(Number(cs.max)) ? Number(cs.max) : null, bands };
+    // max: null stays null (Number(null) is 0, which would change the document on every load: never "the same" in sync)
+    const max = cs.max === null || cs.max === undefined || cs.max === '' ? NaN : Number(cs.max);
+    s.custom_scale = { name: 'Custom', kind: cs.kind === 'percent' ? 'percent' : 'points', max: Number.isFinite(max) ? max : null, bands };
   }
   return s;
 }
@@ -122,6 +126,20 @@ export function normalize(raw) {
 let doc = null;
 let lastRaw = null; // the stored text this tab last read or wrote: anything else there was written by another tab
 const listeners = new Set();
+const writeListeners = new Set();
+let quiet = false; // a write that came from the account (sync.js), not from an edit here
+
+/** Which localStorage document this page works on (guest or the signed-in account's copy). Before the first read. */
+export function useKey(key) {
+  if (key !== KEY) { KEY = key; doc = null; lastRaw = null; }
+}
+export const currentKey = () => KEY;
+/** Every write made in this tab (not other tabs, not `quiet` replaces): sync.js marks the account copy as unsynced. */
+export const onWrite = (fn) => writeListeners.add(fn);
+/** Any stored document by key, normalized (null when there is none or it can't be read). */
+export function readDoc(key) {
+  try { const s = localStorage.getItem(key); return s ? normalize(JSON.parse(s)) : null; } catch { return null; }
+}
 
 function read() {
   try {
@@ -163,6 +181,7 @@ function write() {
   } catch (e) {
     throw new StoreError(e && e.name === 'QuotaExceededError' ? 'This browser’s storage is full' : 'This browser won’t let the page save (private mode?)', 507);
   }
+  if (!quiet) for (const fn of writeListeners) fn();
 }
 /** Rows deleted more than 30 days ago go for good, with everything under them. */
 function purge() {
@@ -278,11 +297,13 @@ export const api = {
     return clone(d.settings);
   },
   /** Replace everything (demo data, Reset everything, importing a file). `ifUnchanged`: refuse (409) when another tab
-   * saved since this tab last read, because `next` was built from (or chosen while looking at) this tab's copy. */
-  async replace(next, { ifUnchanged = false } = {}) {
+   * saved since this tab last read, because `next` was built from (or chosen while looking at) this tab's copy.
+   * `fromAccount`: the account's version arriving (sync.js), so it isn't marked as a change to send back. */
+  async replace(next, { ifUnchanged = false, fromAccount = false } = {}) {
     if (ifUnchanged) loadForWrite();
     doc = normalize(next);
-    write();
+    quiet = fromAccount;
+    try { write(); } finally { quiet = false; }
     return api.all();
   },
   /** The whole stored document (backup / sync). */

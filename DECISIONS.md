@@ -99,22 +99,70 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
   `createFromPlan`). Sharing a file needs no accounts and can't leak anyone's marks.
 - The pure parts live in `site/js/files.js` (tests: `tests/files.test.js`, including a real .xlsx round trip).
 
-## Data model and sync (planned, Round 5)
-- **One row per user** in `gradebooks`: the whole gradebook as versioned JSON + `version` + `updated_at`. Inside the JSON
-  the shape mirrors Gradebook's tables (`terms`, `courses`, `components`, `assessments`), so `calc.js` carries over.
-- **Optimistic concurrency:** saves send `base_version`; a mismatch returns 409 → "Updated on another device — Reload /
-  Keep mine". Autosave ~2 s after the last edit; queued offline and retried.
-- Undo / history / Recently deleted live inside the document (capped), so guest mode and accounts behave the same.
+## Data model and sync (Round 5)
+- **One row per user** in `gradebooks`: the whole gradebook as JSON (the same document guest mode keeps in localStorage)
+  + `version` + `bytes` + `updated_at`. Max 1.5 MB per gradebook (D1 rows hold 2 MB); bigger → 413 and "too big".
+- **The page still works on a copy in this browser.** Signed in, store.js uses localStorage `gc-cloud-doc` instead of
+  `gc-gradebook`, so every screen, undo, history and file feature works unchanged and offline. The guest gradebook is never
+  touched by signing in or out: signing out shows it again. `sync.js` marks the copy unsynced on every write
+  (`onWrite`) and ~2 s later sends the whole document to `PUT /api/gradebook` with `base_version`. Sync state
+  (`gc-cloud-meta`: uid, version, dirty) is shared by tabs; Web Locks keep tabs from sending at the same time.
+- **Optimistic concurrency:** the server updates only `WHERE version = base_version`; otherwise 409. The page then fetches
+  the server's copy: identical (another tab already sent it) → fine; different → banner **"Updated on another device —
+  Use that version / Keep mine"** (Keep mine re-sends with the server's version). Never a silent overwrite either way.
+- **When the page fetches:** on load, when the tab becomes visible again (if 30 s since the last fetch), and on `online`.
+  Unsynced changes are sent when the tab is hidden, on `online`, and retried every 30 s when offline. A newer server
+  copy with nothing unsynced here replaces the local copy and re-renders ("Updated from your other device").
+- **Save to cloud:** an empty account + a guest gradebook in this browser → "Save this browser's gradebook to your
+  account?" (a copy). Later, Account → "Add it to my account" (appendDoc, like importing a file) or "Replace".
+- **Session ended with unsynced changes** → the copy stays and a banner says "Signed out — Sign in again", with "Remove
+  from this browser" (AuthGuard: a shared computer must be able to drop the copy without signing in). Consent declined
+  mid-session (consent text changed) → signed out and the page reloads in guest mode, so the copy leaves at once. Another
+  account signing in on the same browser with someone's unsynced copy → offered as a .json download, then dropped.
+- **The server only shallow-checks the document** (object, schema 1, arrays); the page normalizes everything it loads.
+  A full server-side normalize would cost CPU on every save, and the document is only ever read by its own owner.
 
-## Accounts (planned, Round 5)
-- **Google + Microsoft OIDC**, no passwords stored. Microsoft uses the multi-tenant `common` endpoint so UWindsor accounts
-  can try; issuer validated per tenant (`tid`).
+## Accounts (Round 5)
+- **Google + Microsoft OIDC, authorization code + PKCE (S256), no passwords.** state, nonce and the PKCE verifier live in
+  a 10-minute signed (HMAC with `SESSION_SECRET`) `__Host-gc-signin` cookie, so abandoned sign-ins leave no rows. The
+  id_token is verified in full even though it comes straight from the token endpoint: RS256 signature against the
+  provider's JWKS (cached 1 h, refetched once for an unknown `kid`), `iss`, `aud` (+ `azp` when several), `exp`, `iat`
+  (5 min skew), `nbf` when present, `nonce`; the JWKS key must be RSA and not marked for another `use` / `alg`. Redirect URIs come from `PUBLIC_ORIGIN` (wrangler var), never from the request.
+- **Microsoft uses the multi-tenant `common` endpoint**; the issuer must be `https://login.microsoftonline.com/<tid>/v2.0`
+  for the token's own `tid`. Identity = `tid:oid` (Google: `sub`).
 - **Two separate accounts if the same person uses both providers; no auto-linking by email** (Aidan, 2026-11-18).
-  Linking by email across providers is a known account-takeover route.
-- **UWindsor Microsoft accounts may need tenant admin approval** for an unverified multi-tenant app. If so it's a known
-  limitation: a note on the sign-in screen ("If your school account needs admin approval, use Google"), How to use, TODO.
-- **Admin page** only for a Google sign-in whose verified email is `ADMIN_EMAIL` (4aidanbrown@gmail.com); shows user count
-  and storage size only, never grades.
+  Linking by email across providers is a known account-takeover route. Email is stored only as a label.
+- **UWindsor Microsoft accounts may need tenant admin approval** for an unverified multi-tenant app. The callback maps
+  AADSTS65001/90094/90095 (and "admin approval/consent") to `?signin=approval` → "Your school's Microsoft account needs an
+  administrator's approval for GradeCalc. Sign in with Google instead". Not tested with a real UWindsor account yet.
+- **Sessions:** 256-bit random token in `__Host-gc-session` (HttpOnly, Secure, SameSite=Lax, Path=/, 30 days); D1 stores
+  only its SHA-256 and the expiry, checked on every request (expired rows deleted when seen and at each sign-in). At most
+  10 sessions per user (oldest go). Sign-out deletes the row. Signing in again in a browser deletes that browser's
+  previous session row (any account) instead of leaving it valid.
+- **CSRF:** every write needs `Origin` = `PUBLIC_ORIGIN` (required, not just checked when present), `Sec-Fetch-Site`
+  same-origin when sent, `Content-Type: application/json`, and the session's own random `X-CSRF-Token` (from `/api/me`).
+  GETs never change anything.
+- **Rate limits = Workers Rate Limiting bindings** (per Cloudflare location, 60 s): `/auth/*` 20 per IP, `/api/*` 120 per IP and
+  120 per user (RL_API keys `ip:` / `user:`), writes 60 per user. API answers also carry `default-src 'none'` CSP. A missing binding fails closed (429). No D1 write per request just for counting.
+- **Guest mode never calls the server.** The page asks `/api/me` only when this browser has an account copy or just came
+  back from a sign-in (`?signin=ok`). `/api/me` answers 200 `{signedIn:false}` rather than 401 (it's the one probe route);
+  every other `/api/*` route without a session is 401.
+- **Consent before any cloud write:** `consent_version` + `consent_at` on the user row; `PUT /api/gradebook` is 403
+  `consent_required` until the current `CONSENT_VERSION` (worker/index.js and site/js/sync.js, bump both together) is
+  accepted. "No thanks" deletes a brand-new sign-in that has nothing saved, otherwise just signs out.
+- **Account page = a dialog** (person icon in the top bar, More, Settings): who you are, sync state, guest-gradebook copy,
+  download everything (`/api/account/export`: account details + the stored gradebook, a download named
+  `gradecalc-backup-account-…` so LeakGuard blocks committing one) or Excel, sign out, delete account (sessions,
+  gradebook and user in one batch; the guest gradebook in the browser stays).
+- **Admin = a Google sign-in whose subject equals the `ADMIN_SUB` secret** (Aidan's brief, 2026-11-20: not by email,
+  which can change hands or be unverified). `ADMIN_EMAIL` is only a label on the admin page. `/api/admin` returns
+  account counts (per provider), gradebook count, total bytes and active sessions; it never selects `doc`, email or
+  subject (tests grep the route's SQL). Anyone else gets 404.
+- **Errors never echo details:** the Worker catches everything into `{"error":"server_error"}` and logs only the error's
+  name.
+- **Tests run the real Worker on a real SQLite** (`node:sqlite` running the migrations, `tests/fake-cloud.js`) with a fake
+  Google/Microsoft (real RSA keys, JWKS, PKCE-checking token endpoint). ui-check drives the same Worker from the browser
+  (`tests/ui-accounts.mjs`; `node tests/ui-accounts-run.mjs` runs only that part).
 
 ## Math (Round 1)
 **Source for everything labelled "UWindsor":** University of Windsor, *Senate Policy: Policy on Grading and Calculation
