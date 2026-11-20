@@ -10,6 +10,7 @@ import {
 import { openWizard, guessSeason } from './wizard.js';
 import { bellChart, clusterChart, cumulativeChart, termChart, componentChart } from './charts.js';
 import { demoDoc } from './demo.js';
+import { backupName, backupFile, readJson, toSheets, fromSheets, marksTable, fromMarksTable, toCsv, parseCsv, appendDoc, summary, courseTemplate, MAX_FILE_BYTES, XLSX_READ_OPTS, sheetsFromWorkbook } from './files.js';
 import { moveId, sortPatches, copyComponentsPlan, copyCourseBody, remapRefs, bulkText, parseBulk, previewDelta, dropFrom, liveDoc } from './structure.js';
 
 const S = {
@@ -116,6 +117,11 @@ function setSave(kind, text) {
   el.className = `save-state ${kind}`;
   el.textContent = text;
 }
+/** A save was refused because another tab changed the gradebook: say so until the page is reloaded (never a silent drop). */
+function showConflict() {
+  const b = $('conflict');
+  if (b) b.hidden = false;
+}
 async function track(promise) {
   inflight++;
   setSave('', 'Saving…');
@@ -126,6 +132,7 @@ async function track(promise) {
   } catch (e) {
     inflight--;
     setSave('err', `Not saved: ${e.message}`);
+    if (e && e.status === 409) showConflict();
     throw e;
   }
 }
@@ -275,8 +282,10 @@ async function saveSettings(changes) {
     S.data.settings = await track(api.settings(changes));
     if (JSON.stringify(before) !== JSON.stringify(S.data.settings)) record({ type: 'settings', before, after: clone(S.data.settings) }, 'change settings');
     recompute(); render();
+    return true;
   } catch (e) {
     toast(`Not saved: ${e.message}`, { error: true });
+    return false;
   }
 }
 
@@ -409,8 +418,8 @@ function infoTip(key, text) {
 }
 // Follows the default in Settings (one course can override it in Edit structure).
 const CUM_INFO = {
-  best: 'Repeated courses count only your best attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can be higher than every year average.',
-  latest: 'Repeated courses count only your latest attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can differ from every year average.',
+  best: 'Repeated courses count only your best attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can be higher or lower than every year average.',
+  latest: 'Repeated courses count only your latest attempt in the cumulative, but each year’s average keeps the grade from that year, so the cumulative can be higher or lower than every year average.',
   all: 'Repeated courses count every attempt, in the cumulative and in each year’s average.',
 };
 const cumInfo = () => `${CUM_INFO[S.data.settings.repeat_policy_default] || CUM_INFO.best} Change this in Settings, or for one course in Edit structure.`;
@@ -484,6 +493,8 @@ function renderWelcome() {
       h('div', { class: 'row-actions center' },
         h('button', { class: 'btn', type: 'button', id: 'try-demo', text: 'Try it with demo data', on: { click: loadDemo } }),
         h('button', { class: 'btn', type: 'button', text: 'Start with a term', on: { click: () => addTermDialog() } })),
+      h('p', { class: 'muted small' }, 'Have a backup or a spreadsheet? ',
+        h('button', { class: 'link', type: 'button', id: 'welcome-import', text: 'Import a file', on: { click: openFiles } }), '.'),
       h('ul', { class: 'welcome-points' },
         h('li', { text: 'No account needed. Your marks stay in this browser on this device.' }),
         h('li', { text: 'Grade so far, current average, projected grade and “what do I need”, labelled as projections.' }),
@@ -548,6 +559,7 @@ function renderOverview(r) {
     h('h3', { text: 'More' }),
     h('ul', { class: 'list more' },
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Settings (grade scale, repeats, reset)', on: { click: openSettings } })),
+      h('li', null, h('button', { class: 'link', type: 'button', id: 'open-files', text: 'Files: Excel, CSV, backup, templates', on: { click: openFiles } })),
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Recently deleted', on: { click: openDeleted } })),
       h('li', null, h('button', { class: 'link', type: 'button', id: 'history-all', text: 'History (all changes)', on: { click: () => openHistory(null) } }))),
     siteFooter(),
@@ -1083,6 +1095,7 @@ function courseStructure(course) {
     moveCourseRow(course),
     h('p', { class: 'row-actions' },
       h('button', { class: 'btn small', type: 'button', text: 'Duplicate course…', title: 'Same components and items, e.g. for a retake or a new term', on: { click: () => duplicateCourse(course) } }),
+      h('button', { class: 'btn small', type: 'button', id: 'save-template', text: 'Save as template', title: 'Download this course’s structure (no marks) to share or reuse', on: { click: () => saveTemplate(course) } }),
       h('button', { class: 'btn small danger', type: 'button', text: 'Delete course', on: { click: async () => {
       const n = S.live.assessments.filter((a) => isMarked(a) && rawComps(course).some((k) => k.id === a.component_id)).length;
       const body = h('div', null, h('p', { text: `${n ? `Its ${n} mark${n === 1 ? ' is' : 's are'} deleted with it. ` : ''}You can restore it from Recently deleted for 30 days.` }),
@@ -1388,6 +1401,10 @@ async function copyComponents(fromCourse, comps, toCourseId, { withMarks = false
   const all = rawComps(fromCourse);
   const allIds = new Set(all.map((k) => k.id));
   const plan = copyComponentsPlan(comps, all, S.live.assessments.filter((a) => allIds.has(a.component_id)), { withMarks });
+  return createFromPlan(plan, toCourseId, { sameCourse, all });
+}
+/** Create the components and items of a copy plan (duplicate, or a template file) in a course; rules re-pointed. */
+async function createFromPlan(plan, toCourseId, { sameCourse = false, all = [] } = {}) {
   const idMap = new Map(), made = [];
   let order = sameCourse ? Math.max(0, ...all.map((x) => x.sort_order ?? 0)) : 0;
   for (const p of plan) {
@@ -1605,8 +1622,7 @@ function openSettings() {
       changes.custom_scale = p.value;
     }
     closeDialog('dlg');
-    await saveSettings(changes);
-    toast('Settings saved');
+    if (await saveSettings(changes)) toast('Settings saved');
   };
   const kb = Math.max(1, Math.round(api.stats().bytes / 1024));
   openDialog('dlg', h('h2', { text: 'Settings' }),
@@ -1621,8 +1637,9 @@ function openSettings() {
     h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
       h('button', { class: 'btn primary', type: 'button', text: 'Save', on: { click: save } })),
     h('h3', { text: 'Your data' }),
-    h('p', { class: 'muted small', text: `Stored in this browser only (${kb} KB). Clearing your browser’s site data deletes it. Excel / JSON backup comes in a later update.` }),
+    h('p', { class: 'muted small', text: `Stored in this browser only (${kb} KB). Clearing your browser’s site data deletes it: download a backup now and then.` }),
     h('div', { class: 'row-actions' },
+      h('button', { class: 'btn small', type: 'button', id: 'settings-files', text: 'Export / import…', on: { click: openFiles } }),
       h('button', { class: 'btn small', type: 'button', id: 'settings-demo', text: 'Load demo data', on: { click: loadDemo } }),
       h('button', { class: 'btn small danger', type: 'button', id: 'settings-reset', text: 'Reset everything', on: { click: resetAll } })));
 }
@@ -1663,6 +1680,189 @@ async function resetAll() {
   location.hash = '#/';
   render();
   toast('Everything was deleted from this browser.');
+}
+
+// ---------------------------------------------------------------- files: export / import (Round 4)
+// SheetJS (vendored, pinned) is loaded only when an Excel file is written or read.
+const XLSX_SRC = '/vendor/sheetjs-0.20.3/xlsx.mini.min.js';
+let xlsxReady = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  xlsxReady ??= new Promise((resolve, reject) => {
+    const s = h('script', { src: XLSX_SRC });
+    s.addEventListener('load', () => (window.XLSX ? resolve(window.XLSX) : reject(new Error('the Excel library didn’t start'))));
+    s.addEventListener('error', () => { xlsxReady = null; reject(new Error('couldn’t load the Excel library (offline?)')); });
+    document.head.append(s);
+  });
+  return xlsxReady;
+}
+function download(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: name, hidden: true });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+const fileSlug = (s) => String(s || 'course').replace(/[^A-Za-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'course';
+
+async function exportFile(kind) {
+  try {
+    const doc = api.snapshot();
+    const name = backupName();
+    if (kind === 'json') {
+      download(`${name}.json`, new Blob([JSON.stringify(backupFile(doc), null, 1)], { type: 'application/json' }));
+    } else if (kind === 'csv') {
+      download(`${name}.csv`, new Blob([toCsv(marksTable(doc))], { type: 'text/csv;charset=utf-8' }));
+    } else {
+      const X = await loadXlsx();
+      const wb = X.utils.book_new();
+      for (const [sheet, rows] of Object.entries(toSheets(doc))) {
+        const ws = X.utils.aoa_to_sheet(rows);
+        ws['!cols'] = (rows[0] || []).map((_, j) => ({ wch: Math.min(40, Math.max(8, ...rows.slice(0, 200).map((r) => String(r[j] ?? '').length))) }));
+        X.utils.book_append_sheet(wb, ws, sheet);
+      }
+      download(`${name}.xlsx`, new Blob([X.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    }
+    toast(kind === 'json' ? 'Backup downloaded (everything, incl. history)' : kind === 'csv' ? 'CSV of your marks downloaded' : 'Excel workbook downloaded');
+  } catch (e) {
+    toast(`Couldn’t export: ${e.message}`, { error: true });
+  }
+}
+
+/** A chosen file → { kind: 'backup' | 'sheets' | 'csv', doc } or { kind: 'template', template }. Throws with a reason. */
+async function readImport(file) {
+  if (file.size > MAX_FILE_BYTES) throw new Error('That file is over 5 MB; a gradebook file is much smaller.');
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json')) {
+    let obj;
+    try { obj = JSON.parse(await file.text()); } catch { throw new Error('That .json file isn’t valid JSON.'); }
+    return readJson(obj);
+  }
+  if (name.endsWith('.csv') || name.endsWith('.txt')) return { kind: 'csv', doc: fromMarksTable(parseCsv(await file.text())) };
+  if (/\.(xlsx|xlsm|xls|ods)$/.test(name)) {
+    const X = await loadXlsx();
+    let wb;
+    try { wb = X.read(await file.arrayBuffer(), XLSX_READ_OPTS); } catch { throw new Error('Couldn’t read that spreadsheet.'); }
+    return { kind: 'sheets', doc: fromSheets(sheetsFromWorkbook(X, wb)) };
+  }
+  throw new Error('Pick a .xlsx, .csv or .json file.');
+}
+
+function openFiles() {
+  const err = h('div', { class: 'err-msg', id: 'import-err', role: 'alert' });
+  const input = h('input', { type: 'file', id: 'import-file', accept: '.xlsx,.xls,.ods,.csv,.json', 'aria-label': 'Import a file' });
+  input.addEventListener('change', async () => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    err.textContent = '';
+    let got;
+    try { got = await readImport(file); } catch (e) { err.textContent = e.message; return; }
+    if (got.kind === 'template') importTemplate(got.template);
+    else importDialog(got, file.name);
+  });
+  const kb = Math.max(1, Math.round(api.stats().bytes / 1024));
+  openDialog('dlg', h('h2', { text: 'Files' }),
+    h('h3', { text: 'Download' }),
+    h('div', { class: 'row-actions' },
+      h('button', { class: 'btn small', type: 'button', id: 'export-xlsx', text: 'Excel (.xlsx)', on: { click: () => exportFile('xlsx') } }),
+      h('button', { class: 'btn small', type: 'button', id: 'export-csv', text: 'CSV (marks)', on: { click: () => exportFile('csv') } }),
+      h('button', { class: 'btn small primary', type: 'button', id: 'export-json', text: 'Backup (.json)', on: { click: () => exportFile('json') } })),
+    h('ul', { class: 'muted small files-help' },
+      h('li', { text: 'Backup (.json): everything, including History and Recently deleted. Use it to move to another browser or keep a copy.' }),
+      h('li', { text: 'Excel: one sheet per kind of row, with your averages beside them. You can edit it and import it again: the “Read me” sheet explains how.' }),
+      h('li', { text: 'CSV: one row per mark (term, course, component, item). Rules, curves, drops and item weights aren’t in it.' })),
+    h('h3', { text: 'Import' }),
+    h('p', { class: 'muted small', text: 'A GradeCalc backup, Excel workbook or CSV, or a course template. You choose next whether it replaces your gradebook or is added to it.' }),
+    h('label', { class: 'btn small file-pick' }, 'Choose a file…', input),
+    err,
+    h('h3', { text: 'Course templates' }),
+    h('p', { class: 'muted small', text: 'A template is a course’s structure (components, weights, items, rules) with no marks, to share with classmates or reuse. Save one from a course in Edit structure → “Save as template”, and import it here.' }),
+    h('p', { class: 'muted small', text: `Your gradebook uses ${kb} KB in this browser. Files are made and read on this device; nothing is uploaded.` }),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Close', on: { click: () => closeDialog('dlg') } })));
+}
+
+function importDialog({ kind, doc }, fileName) {
+  const n = summary(doc), mine = summary(api.snapshot());
+  const what = `${n.terms} term${n.terms === 1 ? '' : 's'}, ${n.courses} course${n.courses === 1 ? '' : 's'}, ${n.marks} mark${n.marks === 1 ? '' : 's'}`;
+  if (!n.terms && !n.courses) { toast('That file has no terms or courses in it.', { error: true }); return; }
+  const empty = !mine.terms && !mine.courses;
+  const go = async (mode) => {
+    closeDialog('dlg');
+    const prev = api.snapshot();
+    const next = mode === 'add' ? appendDoc(prev, doc) : doc;
+    try {
+      S.data = await track(api.replace(next, { ifUnchanged: true }));
+    } catch (e) {
+      toast(`Not imported: ${e.message}`, { error: true });
+      return;
+    }
+    if (mode === 'replace') clearViewChoices();
+    clearUndo();
+    S.collapsed.clear();
+    recompute();
+    location.hash = '#/overview';
+    render();
+    // Undo puts `prev` back only while the gradebook is still exactly what the import made. ifUnchanged alone isn't
+    // enough: an edit made here since, or another tab's save this tab already reloaded (storage event), would be wiped.
+    const imported = JSON.stringify(api.snapshot());
+    toast(`Imported ${what}${mode === 'add' ? ' (added)' : ''}`, { action: { label: 'Undo', fn: async () => {
+      if (JSON.stringify(api.snapshot()) !== imported) {
+        toast('Couldn’t undo the import: the gradebook has changed since (here or in another tab). Nothing was changed.', { error: true });
+        return;
+      }
+      try { S.data = await track(api.replace(prev, { ifUnchanged: true })); clearUndo(); recompute(); render(); toast('Import undone'); }
+      catch (e) { toast(`Couldn’t undo: ${e.message}`, { error: true }); }
+    } } });
+  };
+  const kindText = kind === 'backup' ? 'GradeCalc backup' : kind === 'sheets' ? 'Excel workbook' : 'CSV';
+  openDialog('dlg', h('h2', { text: 'Import' }),
+    h('p', null, `${fileName} (${kindText}): `, h('b', { text: what }), '.'),
+    empty ? null : h('p', { class: 'muted small', text: `You have ${mine.terms} term(s), ${mine.courses} course(s) and ${mine.marks} mark(s) now. Replace swaps your whole gradebook for the file${kind === 'backup' ? ', with its settings and history' : kind === 'sheets' ? ', with its settings (your History and Recently deleted start empty)' : ', with default settings (your History and Recently deleted start empty)'}. Add puts the file’s terms after yours and keeps your settings. You can Undo either one right after.` }),
+    kind === 'csv' ? h('p', { class: 'muted small', text: 'From a CSV: terms, courses, components (with weights), items and marks. Set rules, drops and curves afterwards in Edit structure.' }) : null,
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
+      empty ? null : h('button', { class: 'btn', type: 'button', id: 'import-add', text: 'Add to my gradebook', on: { click: () => go('add') } }),
+      h('button', { class: `btn ${empty ? 'primary' : 'danger'}`, type: 'button', id: 'import-replace', text: empty ? 'Import' : 'Replace my gradebook', on: { click: () => go('replace') } })));
+}
+
+/** Save a course's structure (no marks) as a template file. */
+function saveTemplate(course) {
+  const comps = rawComps(course);
+  const ids = new Set(comps.map((k) => k.id));
+  const t = courseTemplate(course, comps, S.live.assessments.filter((a) => ids.has(a.component_id)));
+  download(`gradecalc-template-${fileSlug(course.code || course.title)}.json`, new Blob([JSON.stringify(t, null, 1)], { type: 'application/json' }));
+  toast('Template downloaded (structure only, no marks)');
+}
+
+/** A template file → a new course (with no marks) in a term the student picks. One undo step. */
+function importTemplate({ course, plan }) {
+  if (!S.live.terms.length) { toast('Add a term first, then import the template into it.', { error: true }); return; }
+  const r = readRoute();
+  const termSel = h('select', { 'aria-label': 'Into term', id: 'template-term' },
+    S.live.terms.map((t) => h('option', { value: String(t.id), text: t.name, selected: r.shownTerm && t.id === r.shownTerm.id })));
+  const n = plan.reduce((s, p) => s + p.items.length, 0);
+  const go = async () => {
+    const to = S.live.terms.find((t) => t.id === Number(termSel.value));
+    if (!to) return;
+    closeDialog('dlg');
+    let row = null;
+    await batch(`add ${course.code || course.title} from a template`, async () => {
+      row = await create('courses', { ...course, term_id: to.id, status: 'active',
+        sort_order: Math.max(0, ...coursesOf(to).map((x) => x.sort_order ?? 0)) + 1 });
+      if (row && !(await createFromPlan(plan, row.id))) toast('Stopped part-way: Undo removes the course.', { error: true });
+    });
+    if (!row) return;
+    location.hash = courseHash(to, row);
+    toast(`Added ${course.code || course.title} to ${to.name} from the template`, H.last ? { action: undoAction(H.last) } : {});
+  };
+  openDialog('dlg', h('h2', { text: 'Course from a template' }),
+    h('p', null, h('b', { text: [course.code, course.title].filter(Boolean).join(' · ') }),
+      ` — ${plan.filter((p) => p.parentOld === null).length} component(s), ${n} item(s), no marks.`),
+    h('div', { class: 'form' }, h('label', null, 'Into term', termSel)),
+    h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', on: { click: () => closeDialog('dlg') } }),
+      h('button', { class: 'btn primary', type: 'button', id: 'template-go', text: 'Add course', on: { click: go } })));
 }
 
 // ---------------------------------------------------------------- + Mark bottom sheet
@@ -1836,6 +2036,7 @@ async function init() {
     e.preventDefault();
     if (k === 'z' && !e.shiftKey) undo(); else redo();
   });
+  $('conflict-reload').addEventListener('click', () => location.reload());
   $('open-settings').addEventListener('click', openSettings);
   $('add-mark').addEventListener('click', () => markSheet());
   $('fab-mark').addEventListener('click', () => markSheet());

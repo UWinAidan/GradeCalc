@@ -277,8 +277,10 @@ export const api = {
     write();
     return clone(d.settings);
   },
-  /** Replace everything (demo data, Reset everything, later: restore a backup). */
-  async replace(next) {
+  /** Replace everything (demo data, Reset everything, importing a file). `ifUnchanged`: refuse (409) when another tab
+   * saved since this tab last read, because `next` was built from (or chosen while looking at) this tab's copy. */
+  async replace(next, { ifUnchanged = false } = {}) {
+    if (ifUnchanged) loadForWrite();
     doc = normalize(next);
     write();
     return api.all();

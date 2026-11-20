@@ -39,6 +39,8 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
   so the small one is phone-only (and on printouts).
 - **ⓘ next to the cumulative average** (Aidan, 2026-11-19), text as given: repeats count the best attempt in the
   cumulative while each year keeps that year's grade, so the cumulative can beat every year average.
+  Changed to "can be higher or lower than every year average" (Aidan, 2026-11-20; CalcCheck: a retake raises one course
+  while other courses pull the cumulative down), same for the latest-attempt text.
 - **Undo / redo = a step list in the page, this visit only.** Every saved change is an operation (patch with before/after,
   create, delete, restore, settings); multi-row actions (duplicate, bulk edit, reorder, the wizard, split into parts)
   are one step. Undo writes the inverse through the store, so it shows in History and syncs like any change. A create is
@@ -66,6 +68,36 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
 - **Archived terms** fold under "Archived terms" in the list (all terms in Edit structure) and + Mark skips their
   courses, but they still count in every average and graph: archiving tidies the list, it doesn't change grades.
 - The pure parts live in `site/js/structure.js` (tests: `tests/structure.test.js`).
+- **A save refused because another tab changed the data shows a banner** "Changed in another tab — Reload" (Aidan,
+  2026-11-20) under the top bar, on top of the error toast, and stays until Reload. Toasts disappear; a refused change
+  must never look like it was quietly dropped. Any store 409 (edit, undo, settings, import) triggers it (`track()`).
+
+## Files (Round 4)
+- **SheetJS CE 0.20.3, "mini" build, vendored** in `site/vendor/sheetjs-0.20.3/` (Apache-2.0 licence + README with
+  source URL and SHA-256), unmodified. Loaded with a `<script>` tag only when an Excel file is written or read, so the
+  page itself stays small and nothing comes from a CDN. Mini = xlsx + CSV, no legacy codepages (old .xls may not import).
+  0.20.3 has the fixes for the prototype-pollution and ReDoS advisories in older versions.
+- **Three downloads, made in the browser** (nothing uploaded): **Backup (.json)** = the whole stored document
+  (history and Recently deleted included) in `{ app, kind: "backup", format, gradebook }`; **Excel** = one sheet per row
+  kind (Terms, Courses, Components, Items, Repeats, Settings) + Read me, with "(calculated)" averages beside them that
+  import ignores; **CSV** = one row per item (term, course, component, item, mark), Excel-friendly (BOM, formula guard).
+  Download names start `gradecalc-backup-` so LeakGuard blocks one that gets committed by mistake.
+- **Excel marks are readable:** a percent item has "%" in Out of (85 = 85%), a points item a number (17 out of 20).
+  Rules, curves and excused targets are JSON text (advanced). Ids keep rows linked; a new row may leave Id blank and
+  name its parent instead (Term; Course code or title; Course + Component). Errors name the sheet and row.
+- **Import = Replace or Add**, asked every time (just "Import" when the gradebook is empty). Replace swaps the whole
+  document (a backup brings its settings and history); Add gives every imported row a new id and puts its terms after
+  yours (`appendDoc`). Both are one `api.replace(…, { ifUnchanged: true })`, refused (409 → banner) if another tab
+  saved meanwhile. The toast offers Undo (puts the previous document back); the step history is cleared because ids
+  change. Everything goes through `normalize()`; files over 5 MB or 20,000 rows are refused.
+- **CSV import** builds terms, courses, components and items by name in the order they appear; "Group › Part"
+  component names become a group with parts. It also accepts any spreadsheet's first sheet with at least Course code
+  (or title) and Component columns. Rules, drops and curves aren't in a CSV.
+- **Course templates are files, not a list in the app**: Edit structure → "Save as template" downloads the structure
+  (course title/code/credits/type/cap, components, parts, items, rules) with no marks, letters, curves, dates, notes or
+  term. Importing one asks for the term and creates the course as one undo step (same code path as Duplicate course:
+  `createFromPlan`). Sharing a file needs no accounts and can't leak anyone's marks.
+- The pure parts live in `site/js/files.js` (tests: `tests/files.test.js`, including a real .xlsx round trip).
 
 ## Data model and sync (planned, Round 5)
 - **One row per user** in `gradebooks`: the whole gradebook as versioned JSON + `version` + `updated_at`. Inside the JSON

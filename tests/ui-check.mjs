@@ -4,7 +4,10 @@
  * letters, "what do I need", Edit structure, wizard, settings, graphs, print, Reset everything, at desktop and 360 px.
  * Round 3: the disclaimer on every screen, the cumulative ⓘ, reorder + undo / redo (Ctrl+Z, buttons), bulk add / edit
  * with a preview, the + Mark preview, delete previews, duplicate a course, archive a term.
+ * Round 4: Files (Excel / CSV / JSON export, import replace / add + undo, course templates, a wrong file).
+ * A save refused because another tab changed the data shows "Changed in another tab — Reload".
  * `node tests/ui-check.mjs`. Uses the installed Edge or Chrome (playwright-core), so no browser download. */
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 import { serve } from './serve.mjs';
 import { build } from '../scripts/build.mjs';
@@ -113,7 +116,8 @@ for (const theme of ['dark', 'light']) {
     check(`${tag}: footer on the overview`, (await value('#pane-overview footer.site')).includes('University of Windsor'));
     await page.click('#pane-overview .info-btn');
     check(`${tag}: cumulative ⓘ explains repeats`, await page.isVisible('#pane-overview .info-note')
-      && (await value('#pane-overview .info-note')).includes('Repeated courses count only your best attempt in the cumulative'));
+      && (await value('#pane-overview .info-note')).includes('Repeated courses count only your best attempt in the cumulative')
+      && (await value('#pane-overview .info-note')).includes('can be higher or lower than every year average'));
     check(`${tag}: ⓘ no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
     check(`${tag}: overview no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
 
@@ -145,6 +149,27 @@ for (const theme of ['dark', 'light']) {
     await page.reload();
     await page.waitForSelector('#pane-course .stat.big');
     check(`${tag}: mark kept after reload (localStorage)`, (await value('#pane-course .stat.big .value')) === after);
+    // Another tab saved (no storage event reached this one): typing a mark is refused, and a banner says so until Reload.
+    check(`${tag}: no conflict banner normally`, !(await page.isVisible('#conflict')));
+    await page.evaluate(() => {
+      const d = JSON.parse(localStorage.getItem('gc-gradebook'));
+      d.settings.default_credits = 5;
+      localStorage.setItem('gc-gradebook', JSON.stringify(d));
+    });
+    const marked0 = await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).assessments.filter((a) => a.mark !== null).length);
+    await page.locator('#pane-course tr.unmarked .mark-ed').first().click();
+    await page.keyboard.type('77');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+    const banner = await page.isVisible('#conflict') ? await value('#conflict') : '';
+    check(`${tag}: refused save shows "Changed in another tab — Reload"`, banner.includes('Changed in another tab —') && await page.isVisible('#conflict-reload')
+      && (await page.textContent('#conflict-reload')) === 'Reload', banner.replace(/\s+/g, ' ').trim());
+    check(`${tag}: refused mark not written over the other tab`, (await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).settings.default_credits)) === 5
+      && (await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).assessments.filter((a) => a.mark !== null).length)) === marked0);
+    check(`${tag}: conflict banner no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    await Promise.all([page.waitForEvent('load'), page.click('#conflict-reload')]);
+    await page.waitForSelector('#pane-course .stat.big');
+    check(`${tag}: Reload clears the banner`, !(await page.isVisible('#conflict')) && (await value('#pane-course .stat.big .value')) === after);
     // Letter-only mark: counts as an estimate.
     await page.locator('#pane-course tr.unmarked .mark-ed').first().click();
     await page.keyboard.type('B+');
@@ -213,6 +238,10 @@ for (const theme of ['dark', 'light']) {
     const other = await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).settings.default_credits);
     check(`${tag}: undo after another tab's save keeps that save`, other === 4 && (await compNames()).join() === order1.join()
       && await page.isDisabled('#undo'), `credits ${other}, ${(await compNames()).join()}`);
+    check(`${tag}: refused undo shows the conflict banner`, await page.isVisible('#conflict'));
+    await Promise.all([page.waitForEvent('load'), page.click('#conflict-reload')]);
+    await page.waitForSelector('#pane-course .stat.big');
+    await page.click('#toggle-structure');
     await page.locator('#pane-course .comp-head .order button[title="Move up"]:not([disabled])').first().click(); // back to order0
     await page.waitForTimeout(150);
     // Delete a component with marks: the warning lists the marks and previews the average.
@@ -269,6 +298,102 @@ for (const theme of ['dark', 'light']) {
       await page.click('#dlg .row .btn.primary');
       await page.waitForTimeout(100);
       check(`${tag}: 4.0 scale shows GPA`, (await value('#pane-overview .stat.big .foot')).startsWith('GPA '));
+    }
+
+    // Files (Round 4): downloads made in the page; imports read in the page (nothing uploaded).
+    await page.goto(BASE + '/#/overview');
+    await page.waitForSelector('#open-files');
+    await page.click('#open-files');
+    check(`${tag}: files dialog no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
+    const grab = async (sel) => {
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.click(sel)]);
+      const file = await dl.path();
+      return { name: dl.suggestedFilename(), file, bytes: readFileSync(file) };
+    };
+    const xlsx = await grab('#export-xlsx');
+    check(`${tag}: Excel export (.xlsx, zip)`, /^gradecalc-backup-\d{4}-\d{2}-\d{2}\.xlsx$/.test(xlsx.name) && xlsx.bytes.subarray(0, 2).toString() === 'PK', xlsx.name);
+    const csv = await grab('#export-csv');
+    check(`${tag}: CSV export`, csv.name.endsWith('.csv') && csv.bytes.toString('utf8').startsWith('﻿Term,Year of study,Course code'));
+    const json = await grab('#export-json');
+    const backup = JSON.parse(json.bytes.toString('utf8'));
+    check(`${tag}: JSON backup export`, backup.app === 'GradeCalc' && backup.kind === 'backup' && backup.gradebook.courses.filter((c) => !c.deleted_at).length === (await live('courses')));
+    if (!phone && theme === 'dark') {
+      const cum0 = await value('#pane-overview .stat.big .value');
+      const terms0 = await live('terms');
+      // Excel back in, replacing: same averages.
+      await page.setInputFiles('#import-file', { name: xlsx.name, mimeType: 'application/octet-stream', buffer: xlsx.bytes });
+      await page.waitForSelector('#import-replace');
+      check(`${tag}: import asks replace or add`, await page.isVisible('#import-add') && (await value('#dlg')).includes('Excel workbook'));
+      await page.click('#import-replace');
+      await page.waitForTimeout(150);
+      check(`${tag}: Excel import → same cumulative`, (await value('#pane-overview .stat.big .value')) === cum0 && (await live('terms')) === terms0);
+      // JSON added to it: twice the terms; Undo in the toast takes it back.
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: json.name, mimeType: 'application/json', buffer: json.bytes });
+      await page.click('#import-add');
+      await page.waitForTimeout(150);
+      check(`${tag}: JSON import (add) doubles the terms`, (await live('terms')) === terms0 * 2);
+      await page.locator('.toast button', { hasText: 'Undo' }).last().click();
+      await page.waitForTimeout(150);
+      check(`${tag}: Undo the import`, (await live('terms')) === terms0 && (await value('#pane-overview .stat.big .value')) === cum0);
+      // Undo of an import after another tab saved (and this tab already reloaded it): refused, the other tab's save kept.
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: json.name, mimeType: 'application/json', buffer: json.bytes });
+      await page.click('#import-add');
+      await page.waitForTimeout(150);
+      const tab2 = await ctx.newPage();
+      await tab2.goto(`${BASE}/`);
+      await tab2.evaluate(() => {
+        const d = JSON.parse(localStorage.getItem('gc-gradebook'));
+        d.settings.default_credits = 6;
+        localStorage.setItem('gc-gradebook', JSON.stringify(d));
+      });
+      await tab2.close();
+      await page.waitForTimeout(200); // the storage event reloads this tab
+      await page.locator('.toast button', { hasText: 'Undo' }).last().click();
+      await page.waitForTimeout(150);
+      check(`${tag}: Undo import after another tab's save is refused (no overwrite)`, (await live('terms')) === terms0 * 2
+        && (await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).settings.default_credits)) === 6
+        && (await page.locator('.toast.err', { hasText: 'Couldn’t undo the import' }).count()) === 1);
+      // Back to the exported state for the checks below.
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: json.name, mimeType: 'application/json', buffer: json.bytes });
+      await page.click('#import-replace');
+      await page.waitForTimeout(150);
+      check(`${tag}: backup import (replace) restores the gradebook`, (await live('terms')) === terms0 && (await value('#pane-overview .stat.big .value')) === cum0);
+      // Course template: save from Edit structure, import into a term → a new course with no marks.
+      await page.goto(`${BASE}/#/t${stats.term_id}/c${stats.id}`);
+      await page.waitForSelector('#pane-course h2');
+      await page.click('#toggle-structure');
+      const tpl = await grab('#save-template');
+      const tplText = tpl.bytes.toString('utf8');
+      check(`${tag}: template has no marks`, tpl.name.startsWith('gradecalc-template-') && JSON.parse(tplText).kind === 'course-template' && !tplText.includes('"mark"'));
+      await page.click('#toggle-structure');
+      const courses1 = await live('courses'), marks1 = await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).assessments.filter((a) => a.mark !== null && !a.deleted_at).length);
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: tpl.name, mimeType: 'application/json', buffer: tpl.bytes });
+      await page.click('#template-go');
+      await page.waitForTimeout(200);
+      check(`${tag}: course from a template (no marks)`, (await live('courses')) === courses1 + 1
+        && (await page.evaluate(() => JSON.parse(localStorage.getItem('gc-gradebook')).assessments.filter((a) => a.mark !== null && !a.deleted_at).length)) === marks1
+        && (await value('#pane-course .stat.big .value')) === '—');
+      await page.click('#undo');
+      await page.waitForTimeout(150);
+      check(`${tag}: one undo removes the template course`, (await live('courses')) === courses1);
+      // CSV in, replacing.
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: csv.name, mimeType: 'text/csv', buffer: csv.bytes });
+      await page.click('#import-replace');
+      await page.waitForTimeout(150);
+      check(`${tag}: CSV import`, (await live('courses')) === backup.gradebook.courses.filter((c) => !c.deleted_at).length);
+      // A file that isn't ours: a clear message, nothing changed.
+      await page.click('#open-files');
+      await page.setInputFiles('#import-file', { name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello": 1}') });
+      await page.waitForSelector('#import-err:not(:empty)');
+      check(`${tag}: wrong file → message`, (await value('#import-err')).includes('isn’t a GradeCalc file'));
+      await page.click('#dlg .row .btn');
+    } else {
+      await page.click('#dlg .row .btn');
     }
 
     // Reset everything → welcome again.

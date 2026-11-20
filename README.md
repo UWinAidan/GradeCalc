@@ -19,15 +19,18 @@ What it does now:
   mark or delete something.
 - Graphs, light and dark themes, a change history (per course or all changes), Recently deleted (30 days), and a print
   view.
+- Files (More → Files): download a full backup (.json), an Excel workbook you can edit and import again, or a CSV of
+  your marks; import any of them to replace or add to your gradebook (with Undo). Save a course's structure as a
+  template (no marks) to share with classmates. Files are made and read in your browser; nothing is uploaded.
 
-Coming later: Excel / CSV / JSON backup and course templates, then optional sign-in with Google or Microsoft to sync
-across devices.
+Coming later: optional sign-in with Google or Microsoft to sync across devices.
 
 Made for students at the University of Windsor, but anyone can use it. *Not affiliated with or endorsed by the University
 of Windsor.*
 
 ## Privacy in one paragraph
-Right now there are no accounts: your grades stay in your browser (localStorage) and are never sent anywhere. When
+Right now there are no accounts: your grades stay in your browser (localStorage) and are never sent anywhere. Backup,
+Excel and CSV files are made on your device. When
 optional accounts arrive, your gradebook will be stored in a Cloudflare D1 database and only you will be able to see it.
 No passwords will be stored (sign-in via Google/Microsoft), and you will be able to download or delete everything at any
 time. There are no ads, trackers or analytics. Details: [Privacy](https://gradecalc.aidanwbrown.com/privacy).
@@ -57,6 +60,7 @@ The Worker `gradecalc` serves `site/` as static assets and runs only for `/api/*
 3. **Secrets** (from Round 5 on, never in git): `npx wrangler secret put <NAME>` for each value in `.dev.vars.example`.
 
 ## Contributing / development
-See `CLAUDE.md` (layout, commands, rules). Before pushing, run `npm run setup-hooks` once so the LeakGuard pre-push check runs.
+See `CLAUDE.md` (layout, commands, rules). Excel support uses [SheetJS Community Edition](https://sheetjs.com) 0.20.3
+(Apache-2.0), vendored unmodified in `site/vendor/` with its licence. Before pushing, run `npm run setup-hooks` once so the LeakGuard pre-push check runs.
 
 Made by [Aidan Brown](https://aidanwbrown.com).

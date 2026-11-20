@@ -3,3 +3,5 @@
 # Shell hooks must keep LF endings on Windows checkouts
 .githooks/* text eol=lf
 *.sh text eol=lf
+# Vendored libraries: byte-for-byte as published (the SHA-256 in their README must match)
+site/vendor/** -text
