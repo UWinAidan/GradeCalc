@@ -424,14 +424,14 @@ export const tests = [
   }),
 
   T('AuthGuard: /api/* is rate limited per user too (many IPs, one account → 429)', async () => {
-    const t = await setup({ RL_API: makeLimiter(4) });
+    const t = await setup({ RL_USER: makeLimiter(4) });
     const a = await signedIn(t, 'student-a', { consent: false }); // /api/me once in signIn
     let n = 0;
     const from = (ip) => worker.fetch(new Request(`${ORIGIN}/api/gradebook`, { headers: { Cookie: `${SESSION_COOKIE}=${a.jar.get(SESSION_COOKIE)}`, 'CF-Connecting-IP': ip } }), t.env);
     for (let i = 0; i < 3; i++) assert.equal((await from(`198.51.100.${++n}`)).status, 200);
     const r = await from(`198.51.100.${++n}`);
     assert.equal(r.status, 429);
-    assert.ok(t.env.RL_API.counts.get(`user:${(await t.env.gradecalc.raw.prepare('SELECT id FROM users').get()).id}`) >= 5);
+    assert.ok(t.env.RL_USER.counts.get(`user:${(await t.env.gradecalc.raw.prepare('SELECT id FROM users').get()).id}`) >= 5);
   }),
 
   T('AuthGuard: API answers carry a no-content CSP (a JSON answer opened as a page runs nothing) and HSTS', async () => {

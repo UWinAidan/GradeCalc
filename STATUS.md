@@ -31,17 +31,15 @@ list, README).
 **State (observed):** run-tests 246/0, ui-check 392/0, LeakGuard PASS. Live site: accounts unverified (secrets not set →
 sign-in says "isn't switched on yet").
 
-**Open:** per-IP /api limit 120/min may trip on shared campus WiFi (product call; consider 600); observability logs
-callback URLs (single-use codes); CONSENT_VERSION kept at 1 (never deployed); ADMIN_EMAIL is in public wrangler.jsonc
-(pre-existing). Privacy says D1 recovery history "up to 30 days" (7 on the free plan; unverified against Cloudflare docs).
+**Open:** observability logs callback URLs (single-use codes); Privacy says D1 recovery history "up to 30 days"
+(7 on the free plan; unverified against Cloudflare docs). Aidan's answers applied (2026-11-20): rate limits 600/min per
+IP + 120/min per user (RL_USER), consent stays v1 until launch, email label → ADMIN_LABEL "GradeCalc admin" (no history
+rewrite), ADMIN_SUB secret only. Remote migration NOT run (Aidan's call).
 
 **Next steps**
-1. Aidan: `npx wrangler d1 migrations apply gradecalc --remote`.
-2. Aidan: Google + Microsoft OAuth apps, then `wrangler secret put` SESSION_SECRET, GOOGLE_CLIENT_ID/SECRET,
-   MICROSOFT_CLIENT_ID/SECRET (README "Accounts setup").
-3. Aidan signs in with Google → `npx wrangler d1 execute gradecalc --remote --command "SELECT provider, subject, email FROM users WHERE provider='google'"` → `wrangler secret put ADMIN_SUB`.
-4. Test Microsoft with a UWindsor account; live check of sync between two devices and delete account.
-5. Round 6 (How to use + PWA): TODO.md lists for Rounds 2–5.
+1. Aidan: TODO.md "Accounts go-live (Aidan)" steps 1–6 (migration, OAuth apps, secrets, ADMIN_SUB, UWindsor test).
+2. After go-live: live check of sign-in with both providers, sync between two devices, delete account.
+3. Round 6 (How to use + PWA): TODO.md lists for Rounds 2–5.
 
 **Gotchas**
 - Bash heredocs with backticks/template literals fail: write scripts with the Write tool, run with python.

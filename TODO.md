@@ -29,11 +29,33 @@
 ## Round 5 — accounts
 - [x] Google + Microsoft OIDC, sessions, CSRF, rate limits, consent screen, Save to cloud, autosave/offline/conflict (2026-11-20)
 - [x] Account page (download JSON/Excel, delete), admin page (count + storage only), AuthGuard isolation tests
-- [ ] **Aidan:** apply the D1 migration, create the Google + Microsoft OAuth apps, `wrangler secret put` (README "Accounts setup")
-- [ ] **Aidan:** sign in with Google once → read your `sub` → `wrangler secret put ADMIN_SUB`
+- [x] Rate limits 600/min per IP + 120/min per signed-in user; email label removed from wrangler.jsonc (Aidan, 2026-11-20)
+- [ ] Go-live steps: see "Accounts go-live (Aidan)" below
 - [ ] Test Microsoft sign-in with a UWindsor account; if admin approval is required → keep the "use Google" message
       (already shown on that error) and add a line to the sign-in dialog + How to use
 - [ ] Check the live site after deploy: sign in with both providers, sync between two devices, delete account
+
+## Accounts go-live (Aidan)
+Until these are done the live site says sign-in "isn't switched on yet"; guest mode works. Details: README "Accounts setup".
+1. [ ] `npx wrangler d1 migrations apply gradecalc --remote`
+2. [ ] Google OAuth app (console.cloud.google.com → Google Auth Platform): Audience **External**, then **Publish app**
+       ("In production"). Client type **Web application**, Authorised redirect URI exactly:
+       `https://gradecalc.aidanwbrown.com/auth/callback/google`
+3. [ ] Microsoft app registration (entra.microsoft.com → App registrations → New registration): Supported account types
+       **Accounts in any organizational directory (any Microsoft Entra ID tenant) and personal Microsoft accounts**.
+       Redirect URI, platform **Web**, exactly: `https://gradecalc.aidanwbrown.com/auth/callback/microsoft`.
+       Certificates & secrets → New client secret → copy its **Value** (not the Secret ID).
+       Secret expiry date: ____________ (renew before then, then `wrangler secret put MICROSOFT_CLIENT_SECRET` again)
+4. [ ] Secrets (each command asks for the value; type/paste it in the terminal):
+       `npx wrangler secret put SESSION_SECRET` (make one with
+       `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`)
+       `npx wrangler secret put GOOGLE_CLIENT_ID` · `npx wrangler secret put GOOGLE_CLIENT_SECRET`
+       `npx wrangler secret put MICROSOFT_CLIENT_ID` (Application (client) ID) · `npx wrangler secret put MICROSOFT_CLIENT_SECRET`
+5. [ ] Sign in on the site with Google once, then read your subject ID:
+       `npx wrangler d1 execute gradecalc --remote --command "SELECT provider, subject FROM users WHERE provider = 'google'"`
+       → `npx wrangler secret put ADMIN_SUB` (that `subject`). Sign out and in again: Account shows **Admin**.
+6. [ ] Test sign-in with your UWindsor Microsoft account: admin approval needed or not? If needed, add a line to the
+       sign-in dialog + How to use (the "use Google" message on that error already exists).
 
 ## Round 6 — guide + PWA
 - [ ] How to use (5 steps, every field, worked example, searchable FAQ; note that other schools may count the "latest attempt" and how to change the repeat policy), Privacy page final, manifest + service worker, launch

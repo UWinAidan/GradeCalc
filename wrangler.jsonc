@@ -21,17 +21,19 @@
   ],
 
   // Not secret. PUBLIC_ORIGIN fixes the OAuth redirect URIs and the allowed Origin for writes (.dev.vars overrides it
-  // locally). ADMIN_EMAIL is only a label on the admin page: admin = a Google sign-in whose subject is the ADMIN_SUB secret.
+  // locally). ADMIN_LABEL is only a heading on the admin page: admin = a Google sign-in whose subject is the ADMIN_SUB secret
+  // (set with `wrangler secret put ADMIN_SUB`, never here).
   "vars": {
     "PUBLIC_ORIGIN": "https://gradecalc.aidanwbrown.com",
-    "ADMIN_EMAIL": "4aidanbrown@gmail.com"
+    "ADMIN_LABEL": "GradeCalc admin"
   },
 
-  // Rate limits (per Cloudflare location, 60 s windows): sign-in per IP, API per IP and per user, writes per user.
-  // A missing binding fails closed (the Worker answers 429).
+  // Rate limits (per Cloudflare location, 60 s windows): sign-in 20 per IP, API 600 per IP (campus WiFi shares one IP),
+  // API 120 per signed-in user, writes 60 per user. A missing binding fails closed (the Worker answers 429).
   "ratelimits": [
     { "name": "RL_AUTH", "namespace_id": "1501", "simple": { "limit": 20, "period": 60 } },
-    { "name": "RL_API", "namespace_id": "1502", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_API", "namespace_id": "1502", "simple": { "limit": 600, "period": 60 } },
+    { "name": "RL_USER", "namespace_id": "1504", "simple": { "limit": 120, "period": 60 } },
     { "name": "RL_WRITE", "namespace_id": "1503", "simple": { "limit": 60, "period": 60 } }
   ],
 

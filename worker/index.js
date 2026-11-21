@@ -136,7 +136,7 @@ async function api(request, env, url) {
   const db = env.gradecalc;
   const s = await getSession(request, env);
   // Per user as well as per IP (one account used from many addresses).
-  if (s && !(await allowed(env, 'RL_API', `user:${s.id}`))) return tooMany();
+  if (s && !(await allowed(env, 'RL_USER', `user:${s.id}`))) return tooMany();
 
   // The only route that answers without a session: "am I signed in?" (never an error, so the page can just ask).
   if (path === '/api/me' && method === 'GET') {
@@ -229,7 +229,7 @@ async function api(request, env, url) {
     const providers = { google: 0, microsoft: 0 };
     for (const r of byProvider.results) providers[r.provider] = r.n;
     return json({ users: users.results[0].n, providers, gradebooks: books.results[0].n, bytes: books.results[0].bytes,
-      active_sessions: sessions.results[0].n, label: env.ADMIN_EMAIL || null });
+      active_sessions: sessions.results[0].n, label: env.ADMIN_LABEL || null });
   }
 
   return error(404, 'not_found');

@@ -142,20 +142,22 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
 - **CSRF:** every write needs `Origin` = `PUBLIC_ORIGIN` (required, not just checked when present), `Sec-Fetch-Site`
   same-origin when sent, `Content-Type: application/json`, and the session's own random `X-CSRF-Token` (from `/api/me`).
   GETs never change anything.
-- **Rate limits = Workers Rate Limiting bindings** (per Cloudflare location, 60 s): `/auth/*` 20 per IP, `/api/*` 120 per IP and
-  120 per user (RL_API keys `ip:` / `user:`), writes 60 per user. API answers also carry `default-src 'none'` CSP. A missing binding fails closed (429). No D1 write per request just for counting.
+- **Rate limits = Workers Rate Limiting bindings** (per Cloudflare location, 60 s): `/auth/*` 20 per IP (`RL_AUTH`),
+  `/api/*` 600 per IP (`RL_API`; many students share one campus WiFi IP) and 120 per signed-in user (`RL_USER`), writes
+  60 per user (`RL_WRITE`) (Aidan, 2026-11-20). A missing binding fails closed (429). No D1 write per request for counting.
 - **Guest mode never calls the server.** The page asks `/api/me` only when this browser has an account copy or just came
   back from a sign-in (`?signin=ok`). `/api/me` answers 200 `{signedIn:false}` rather than 401 (it's the one probe route);
   every other `/api/*` route without a session is 401.
 - **Consent before any cloud write:** `consent_version` + `consent_at` on the user row; `PUT /api/gradebook` is 403
   `consent_required` until the current `CONSENT_VERSION` (worker/index.js and site/js/sync.js, bump both together) is
-  accepted. "No thanks" deletes a brand-new sign-in that has nothing saved, otherwise just signs out.
+  accepted. Stays at 1 until launch; after launch, bump on every change to the consent text (Aidan, 2026-11-20).
+  "No thanks" deletes a brand-new sign-in that has nothing saved, otherwise just signs out.
 - **Account page = a dialog** (person icon in the top bar, More, Settings): who you are, sync state, guest-gradebook copy,
   download everything (`/api/account/export`: account details + the stored gradebook, a download named
   `gradecalc-backup-account-…` so LeakGuard blocks committing one) or Excel, sign out, delete account (sessions,
   gradebook and user in one batch; the guest gradebook in the browser stays).
 - **Admin = a Google sign-in whose subject equals the `ADMIN_SUB` secret** (Aidan's brief, 2026-11-20: not by email,
-  which can change hands or be unverified). `ADMIN_EMAIL` is only a label on the admin page. `/api/admin` returns
+  which can change hands or be unverified). `ADMIN_SUB` is a wrangler secret, never in wrangler.jsonc; the admin page heading is the generic var `ADMIN_LABEL` ("GradeCalc admin"; the owner's email label was removed from wrangler.jsonc on 2026-11-20, history not rewritten). `/api/admin` returns
   account counts (per provider), gradebook count, total bytes and active sessions; it never selects `doc`, email or
   subject (tests grep the route's SQL). Anyone else gets 404.
 - **Errors never echo details:** the Worker catches everything into `{"error":"server_error"}` and logs only the error's

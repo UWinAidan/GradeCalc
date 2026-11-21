@@ -116,11 +116,11 @@ export function makeEnv(overrides = {}) {
   return {
     gradecalc: makeD1(),
     ASSETS: { fetch: async () => new Response('asset', { status: 200 }) },
-    RL_AUTH: makeLimiter(), RL_API: makeLimiter(), RL_WRITE: makeLimiter(),
+    RL_AUTH: makeLimiter(), RL_API: makeLimiter(), RL_USER: makeLimiter(), RL_WRITE: makeLimiter(),
     // A fresh random key per test env (no fixed secret-looking value in the repo: LeakGuard flags those).
     PUBLIC_ORIGIN: ORIGIN, SESSION_SECRET: b64url(crypto.getRandomValues(new Uint8Array(32))),
     GOOGLE_CLIENT_ID: CLIENT.google, GOOGLE_CLIENT_SECRET: 'g-secret', MICROSOFT_CLIENT_ID: CLIENT.microsoft, MICROSOFT_CLIENT_SECRET: 'm-secret',
-    ADMIN_SUB: 'admin-sub-1', ADMIN_EMAIL: 'admin@example.test',
+    ADMIN_SUB: 'admin-sub-1', ADMIN_LABEL: 'GradeCalc admin',
     ...overrides,
   };
 }
