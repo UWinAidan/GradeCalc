@@ -22,6 +22,9 @@ What it does now:
 - Files (More → Files): download a full backup (.json), an Excel workbook you can edit and import again, or a CSV of
   your marks; import any of them to replace or add to your gradebook (with Undo). Save a course's structure as a
   template (no marks) to share with classmates. Files are made and read in your browser; nothing is uploaded.
+- Works offline and installs as an app (the service worker caches only the site's own files, never your grades).
+- [How to use](https://gradecalc.aidanwbrown.com/help): getting started in 5 steps, every field explained, a worked
+  example and a searchable FAQ.
 
 - Optional sign-in with Google or Microsoft to sync one gradebook across your devices (works offline; changes made on
   two devices at once are never silently overwritten). Download or delete everything from Account at any time.

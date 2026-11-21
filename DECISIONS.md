@@ -166,6 +166,27 @@ Why GradeCalc is the way it is. Newest at the bottom of each section.
   Google/Microsoft (real RSA keys, JWKS, PKCE-checking token endpoint). ui-check drives the same Worker from the browser
   (`tests/ui-accounts.mjs`; `node tests/ui-accounts-run.mjs` runs only that part).
 
+## Guide + PWA (Round 6)
+- **How to use = `/help`** (site/help.html), a static page like About and Privacy, linked from every page's nav and
+  footer, the app footer, the welcome screen and **More**. Sections: 5 steps, worked example, every field, files,
+  accounts, FAQ. Plain HTML (no inline script/style); the FAQ search is site/js/help.js.
+- **Worked example = the demo's DEMO-2300** (in progress) so a reader can open it and see the same numbers. The numbers
+  sit in `data-calc` elements and `tests/pwa.test.js` recomputes them with calc.js: the guide can't drift from the math.
+- **FAQ search** matches every typed word against the question, answer and a `data-keywords` list (synonyms students
+  type: "retake", "incognito"). One match opens; `/help?q=backup#q-backup` links straight to an answer. ui-check
+  searches each required topic.
+- **Accounts are described as "coming soon"** (2026-11-20): sign-in is built but the live site has no OAuth secrets yet,
+  so it says "Sign-in isn't switched on yet". Update the guide's Accounts section, the FAQ (q-account) and the Privacy
+  note when it goes live.
+- **PWA: network-first service worker that caches only our own files.** `site/sw.js` precaches a fixed list (pages,
+  CSS, JS, icons, manifest, SheetJS) and answers only GETs for exactly those paths: online it always fetches (so a push
+  still shows up at once, matching `Cache-Control: no-cache`) and refreshes the copy; offline it serves the copy.
+  `/api/*`, `/auth/*`, other origins and any other path go to the network untouched, so no account data, sign-in codes
+  or sync answers are ever cached. A test fails when a site file is missing from the list or the list names something
+  that isn't a site file. Grades never go in the cache (they're in localStorage / the account).
+- **Icons:** PNGs (192, 512, maskable 512, apple-touch 180) rendered from favicon.svg by `scripts/make-icons.mjs`
+  (installed Edge/Chrome) and committed; the SVG is listed too.
+
 ## Math (Round 1)
 **Source for everything labelled "UWindsor":** University of Windsor, *Senate Policy: Policy on Grading and Calculation
 of Averages* (last amended April 13, 2018), sections I–III.

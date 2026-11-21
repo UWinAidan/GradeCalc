@@ -4,6 +4,7 @@
 // Projections are always labelled and never saved as marks.
 import { computeAll, needFor, needPerItem, parseCurve, curvedMark, itemPct, rawPct, courseCandle, SCALES, letterToPct } from './calc.js';
 import { api, onExternalChange, emptyDoc } from './store.js';
+import './pwa.js';
 import * as sync from './sync.js';
 import {
   h, fill, pct, num, when, parseMark, markText, editable, editorHooks, toast, openDialog, closeDialog, confirmDialog,
@@ -471,14 +472,14 @@ function siteFooter() {
   return h('footer', { class: 'site' },
     h('div', { class: 'links' }, h('span', { text: '© 2026 Aidan Brown' }),
       h('a', { href: 'https://aidanwbrown.com', target: '_blank', rel: 'noopener', text: 'aidanwbrown.com' }),
-      h('a', { href: '/about', text: 'About' }), h('a', { href: '/privacy', text: 'Privacy' })),
+      h('a', { href: '/help', text: 'How to use' }), h('a', { href: '/about', text: 'About' }), h('a', { href: '/privacy', text: 'Privacy' })),
     h('div', { class: 'disclaimer', text: 'Not affiliated with or endorsed by the University of Windsor.' }));
 }
 
 /** Small footer for the term, graphs and course panes (phones show one pane at a time, so the Overview footer is hidden). */
 const miniFooter = () => h('footer', { class: 'site mini' },
   h('span', { text: 'Not affiliated with or endorsed by the University of Windsor.' }), ' ',
-  h('a', { href: '/about', text: 'About' }), ' · ', h('a', { href: '/privacy', text: 'Privacy' }));
+  h('a', { href: '/help', text: 'How to use' }), ' · ', h('a', { href: '/about', text: 'About' }), ' · ', h('a', { href: '/privacy', text: 'Privacy' }));
 
 // ---------------------------------------------------------------- welcome (nothing yet)
 function renderWelcome() {
@@ -494,6 +495,7 @@ function renderWelcome() {
       h('div', { class: 'row-actions center' },
         h('button', { class: 'btn', type: 'button', id: 'try-demo', text: 'Try it with demo data', on: { click: loadDemo } }),
         h('button', { class: 'btn', type: 'button', text: 'Start with a term', on: { click: () => addTermDialog() } })),
+      h('p', { class: 'muted small' }, 'New here? ', h('a', { href: '/help', id: 'welcome-help', text: 'How to use GradeCalc' }), ' (5 steps and a FAQ).'),
       h('p', { class: 'muted small' }, 'Have a backup or a spreadsheet? ',
         h('button', { class: 'link', type: 'button', id: 'welcome-import', text: 'Import a file', on: { click: openFiles } }), '.'),
       h('ul', { class: 'welcome-points' },
@@ -564,7 +566,8 @@ function renderOverview(r) {
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Settings (grade scale, repeats, reset)', on: { click: openSettings } })),
       h('li', null, h('button', { class: 'link', type: 'button', id: 'open-files', text: 'Files: Excel, CSV, backup, templates', on: { click: openFiles } })),
       h('li', null, h('button', { class: 'link', type: 'button', text: 'Recently deleted', on: { click: openDeleted } })),
-      h('li', null, h('button', { class: 'link', type: 'button', id: 'history-all', text: 'History (all changes)', on: { click: () => openHistory(null) } }))),
+      h('li', null, h('button', { class: 'link', type: 'button', id: 'history-all', text: 'History (all changes)', on: { click: () => openHistory(null) } })),
+      h('li', null, h('a', { href: '/help', id: 'more-help', text: 'How to use and FAQ' }))),
     siteFooter(),
   );
 }
@@ -1677,7 +1680,7 @@ async function resetAll() {
   const n = S.live.courses.length;
   const marks = S.live.assessments.filter(isMarked).length;
   const ok = await confirmDialog('Reset everything?',
-    `This deletes ${S.live.terms.length} term(s), ${n} course(s) and ${marks} mark(s) from ${where()}, plus history and Recently deleted. It can’t be undone. Your theme and view choices stay.`,
+    `This deletes ${S.live.terms.length} term(s), ${n} course(s) and ${marks} mark(s) from ${where()}, plus history and Recently deleted. It can’t be undone. Your “Need” targets and recent + Mark courses are cleared too; your theme and graph choices stay.`,
     'Delete everything', { danger: true });
   if (!ok) return;
   S.data = await track(api.replace(emptyDoc()));

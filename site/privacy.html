@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Privacy · GradeCalc</title>
 <meta name="description" content="What GradeCalc stores, where, and who can see it.">
+<meta name="theme-color" content="#1a1c1d">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/css/tokens.css">
 <link rel="stylesheet" href="/css/site.css">
 <script src="/js/theme.js"></script>
@@ -17,6 +20,7 @@
   <span class="tag">Free grade calculator</span>
   <nav aria-label="Site">
     <a href="/">Calculator</a>
+    <a href="/help">How to use</a>
     <a href="/about">About</a>
     <a href="/privacy" aria-current="page">Privacy</a>
     <button class="btn small" id="theme-btn" type="button" aria-label="Switch light / dark theme">◐ Theme</button>
@@ -24,16 +28,17 @@
 </header>
 <main class="prose">
   <h1>Privacy</h1>
-  <p class="muted">Last updated 2026-11-20 (accounts).</p>
+  <p class="muted">Last updated 2026-11-20.</p>
   <div class="note" id="privacy-status">GradeCalc works fully without an account: then everything you type stays in your own
     browser on this device and nothing is sent to a server. Signing in with Google or Microsoft is optional and only adds
-    syncing between your devices.</div>
+    syncing between your devices. Sign-in is coming soon: it isn’t switched on yet on this site, so for now
+    everything is guest mode.</div>
 
   <h2>Without an account</h2>
   <ul>
     <li><b>Where your grades are:</b> in your browser's local storage for this site (localStorage), on this device only.
       The page never sends them anywhere. Other people, and the site owner, can't see them.</li>
-    <li><b>What else is kept there:</b> your light/dark theme and a few view choices (your target in "What do I need?" and
+    <li><b>What else is kept there:</b> your light/dark theme and a few view choices (your target in a course's "Need … to finish with" line and
       on the term graph, your recent courses for <b>+ Mark</b>, and how the cumulative graph is shown).
       Also a change history (your last 1000 changes, shown per course or under <b>History (all changes)</b>), and
       <b>Recently deleted</b>. Deleted things are removed for good after 30 days.</li>
@@ -47,6 +52,10 @@
       course templates, are made and read by the page on your device. Nothing is uploaded. The backup holds everything,
       including your history and Recently deleted, so keep it somewhere private. A course template holds only the course's
       structure (components, weights, items, rules): no marks, dates, notes or curves.</li>
+    <li><b>Offline copy of the site:</b> a service worker keeps a copy of this site's own pages, scripts, styles and icons
+      in your browser's cache, so GradeCalc opens without internet and can be installed as an app. That copy holds no
+      grades, it never stores answers from the sign-in or sync addresses, and it's refreshed each time you visit online.
+      Clearing this site's data removes it.</li>
     <li><b>Excel support:</b> uses SheetJS Community Edition (Apache-2.0), served from this site, not from a third party. It
       only loads when you download or import an Excel file.</li>
   </ul>
@@ -112,7 +121,7 @@
   <p>Questions: <a href="mailto:contact@aidanwbrown.com">contact@aidanwbrown.com</a></p>
 </main>
 <footer class="site">
-  <div class="links"><span>© 2026 Aidan Brown</span><a href="https://aidanwbrown.com" target="_blank" rel="noopener">aidanwbrown.com</a><a href="/about">About</a><a href="/privacy">Privacy</a></div>
+  <div class="links"><span>© 2026 Aidan Brown</span><a href="https://aidanwbrown.com" target="_blank" rel="noopener">aidanwbrown.com</a><a href="/help">How to use</a><a href="/about">About</a><a href="/privacy">Privacy</a></div>
   <div class="disclaimer">Not affiliated with or endorsed by the University of Windsor.</div>
 </footer>
 </body>

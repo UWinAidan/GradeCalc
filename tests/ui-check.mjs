@@ -7,6 +7,8 @@
  * Round 4: Files (Excel / CSV / JSON export, import replace / add + undo, course templates, a wrong file).
  * A save refused because another tab changed the data shows "Changed in another tab — Reload".
  * Round 5: accounts end to end (ui-accounts.mjs: the real Worker on SQLite + a fake Google / Microsoft).
+ * Round 6: How to use (worked example, FAQ search finds each topic), links to it, and the PWA: manifest, service worker,
+ * and the site opening with the server switched off (offline, from the service worker's cache).
  * `node tests/ui-check.mjs`. Uses the installed Edge or Chrome (playwright-core), so no browser download. */
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
@@ -31,7 +33,7 @@ if (!browser) { console.error('No Edge/Chrome found for Playwright.'); process.e
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail ? '  ' + detail : '')); };
 
-const PAGES = ['/about', '/privacy'];  // the calculator (/) is checked below
+const PAGES = ['/help', '/about', '/privacy'];  // the calculator (/) is checked below
 const SIZES = [['desktop', 1366, 768], ['phone 360', 360, 740]];
 
 for (const theme of ['dark', 'light']) {
@@ -47,9 +49,11 @@ for (const theme of ['dark', 'light']) {
       const res = await page.goto(BASE + p);
       check(`${tag}: loads`, res.status() === 200);
       check(`${tag}: theme follows system`, (await page.getAttribute('html', 'data-theme')) === theme);
-      check(`${tag}: header + nav`, await page.isVisible('header.top a.home') && (await page.$$('header.top nav a')).length === 3);
+      check(`${tag}: header + nav`, await page.isVisible('header.top a.home') && (await page.$$('header.top nav a')).length === 4);
       check(`${tag}: footer disclaimer`, (await page.textContent('footer.site')).includes('Not affiliated with or endorsed by the University of Windsor.'));
       check(`${tag}: footer links About + Privacy`, await page.isVisible('footer.site a[href="/about"]') && await page.isVisible('footer.site a[href="/privacy"]'));
+      check(`${tag}: footer links How to use`, await page.isVisible('footer.site a[href="/help"]'));
+      check(`${tag}: manifest linked`, (await page.getAttribute('link[rel="manifest"]', 'href')) === '/manifest.webmanifest');
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       check(`${tag}: no sideways scroll`, overflow <= 0, `overflow ${overflow}px`);
     }
@@ -80,6 +84,27 @@ check('About shows the disclaimer', (await page.textContent('main')).includes('N
 await page.click('#about-copy');
 await page.waitForTimeout(100);
 check('Copy button copies the email', (await page.textContent('#about-copy')) === 'Copied ✓');
+
+// How to use: the worked example shows calc.js's numbers (tests/pwa.test.js checks the values); the FAQ search finds
+// each topic by its words, and says so when nothing matches.
+await page.goto(BASE + '/help');
+check('How to use: 5 getting-started steps', (await page.locator('ol.steps > li').count()) === 5);
+check('How to use: worked example numbers shown', (await page.locator('[data-calc]').count()) === 5);
+const faqTotal = await page.locator('#faq-list .faq-item').count();
+const FAQ = { 'where stored': 'q-storage', backup: 'q-backup', curve: 'q-curve', retake: 'q-repeat', 'latest attempt': 'q-repeat',
+  'grade so far current average': 'q-sofar', projection: 'q-projection', 'coming soon': 'q-account', offline: 'q-offline',
+  template: 'q-template', 'admin approval': 'q-school', 'delete account': 'q-delete', 'gpa scale': 'q-gpa', 'private incognito': 'q-cleared' };
+for (const [words, id] of Object.entries(FAQ)) {
+  await page.fill('#faq-search', words);
+  const shown = await page.locator('#faq-list .faq-item:not([hidden])').evaluateAll((els) => els.map((e) => e.id));
+  check(`FAQ search "${words}" finds ${id}`, shown.includes(id) && shown.length < faqTotal, shown.join(','));
+}
+await page.fill('#faq-search', 'zzqx');
+check('FAQ search with no match says so', (await page.locator('#faq-list .faq-item:not([hidden])').count()) === 0 && await page.isVisible('#faq-none'));
+await page.fill('#faq-search', '');
+check('FAQ search cleared shows every question', (await page.locator('#faq-list .faq-item:not([hidden])').count()) === faqTotal);
+await page.goto(BASE + '/help?q=backup#q-backup');
+check('FAQ link opens the question', await page.evaluate(() => document.getElementById('q-backup').open) && (await page.inputValue('#faq-search')) === 'backup');
 await ctx.close();
 
 // ---------------------------------------------------------------- the calculator (/)
@@ -111,6 +136,7 @@ for (const theme of ['dark', 'light']) {
     check(`${tag}: welcome shows one clear next step`, await page.isVisible('#quick-start') && await page.isVisible('#try-demo'));
     check(`${tag}: footer disclaimer`, (await value('footer.site')).includes('Not affiliated with or endorsed by the University of Windsor.'));
     check(`${tag}: footer links About + Privacy`, await page.isVisible('footer.site a[href="/about"]') && await page.isVisible('footer.site a[href="/privacy"]'));
+    check(`${tag}: welcome links How to use`, await page.isVisible('#welcome-help') && await page.isVisible('footer.site a[href="/help"]'));
     check(`${tag}: welcome no sideways scroll`, (await overflow()) <= 0, `${await overflow()}px`);
 
     // Demo data: the page shows exactly what calc.js computes.
@@ -432,7 +458,44 @@ for (const theme of ['dark', 'light']) {
 
 await accountChecks({ browser, check, env, base: env.PUBLIC_ORIGIN });
 
+// PWA: the service worker caches the site; with the server switched off the calculator and the guide still open.
+{
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: 'dark' });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(BASE + '/');
+  await page.waitForSelector('#quick-start');
+  const sw = await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    for (let i = 0; i < 50 && !navigator.serviceWorker.controller; i++) await new Promise((r) => setTimeout(r, 100));
+    return { scope: reg.scope, controlled: !!navigator.serviceWorker.controller, cached: (await (await caches.open('gradecalc-v1')).keys()).length };
+  });
+  check('PWA: service worker active and controls the page', sw.controlled && sw.scope === BASE + '/', JSON.stringify(sw));
+  check('PWA: site files cached', sw.cached >= 25, `${sw.cached} files`);
+  const manifest = await (await page.request.get(BASE + '/manifest.webmanifest')).json();
+  check('PWA: manifest', manifest.start_url === '/' && manifest.display === 'standalone' && manifest.icons.length >= 3);
+  await page.click('#try-demo');
+  await page.waitForSelector('#pane-overview .stat.big');
+  const cum = await page.textContent('#pane-overview .stat.big .value');
+  // Switch the server off: every request now fails unless the service worker answers it.
+  server.closeAllConnections();
+  await new Promise((r) => server.close(r));
+  const down = await page.request.get(BASE + '/').then(() => false, () => true);
+  check('PWA: server is off', down);
+  await page.reload();
+  await page.waitForSelector('#pane-overview .stat.big');
+  check('PWA offline: calculator opens with the marks', (await page.textContent('#pane-overview .stat.big .value')) === cum);
+  await page.goto(BASE + '/help');
+  check('PWA offline: How to use opens', (await page.textContent('h1')) === 'How to use GradeCalc');
+  await page.fill('#faq-search', 'backup');
+  check('PWA offline: FAQ search works', await page.isVisible('#q-backup'));
+  await page.goto(BASE + '/privacy');
+  check('PWA offline: Privacy opens', (await page.textContent('h1')) === 'Privacy');
+  check('PWA: no page errors', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await browser.close();
-server.close();
 console.log(`\nui-check: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -58,7 +58,10 @@ Until these are done the live site says sign-in "isn't switched on yet"; guest m
        sign-in dialog + How to use (the "use Google" message on that error already exists).
 
 ## Round 6 — guide + PWA
-- [ ] How to use (5 steps, every field, worked example, searchable FAQ; note that other schools may count the "latest attempt" and how to change the repeat policy), Privacy page final, manifest + service worker, launch
+- [x] How to use (/help), Privacy final, manifest + service worker (offline), polish (2026-11-20; the GuideWriter notes below are
+      covered in /help; reviewed by all four agents)
+- [ ] When accounts go live: update /help "Accounts (optional, coming soon)", FAQ q-account and the Privacy note
+- [x] (done, kept for reference) How to use (5 steps, every field, worked example, searchable FAQ; note that other schools may count the "latest attempt" and how to change the repeat policy), Privacy page final, manifest + service worker, launch
 - [ ] How to use must also cover (noted by GuideWriter, Round 2):
   - Repeats: UWindsor counts the best attempt; many schools count the latest. Change the default in **Settings** →
     "Repeated courses: which attempt counts", or for one course: **Edit structure** → "Repeat of an earlier attempt?" →

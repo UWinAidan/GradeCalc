@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How to use · GradeCalc</title>
+<meta name="description" content="How to use GradeCalc: getting started in 5 steps, every field explained, a worked example and a searchable FAQ.">
+<meta name="theme-color" content="#1a1c1d">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/site.css">
+<script src="/js/theme.js"></script>
+<script type="module" src="/js/site.js"></script>
+<script type="module" src="/js/help.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="home" href="/"><img src="/favicon.svg" alt="">GradeCalc</a>
+  <span class="tag">Free grade calculator</span>
+  <nav aria-label="Site">
+    <a href="/">Calculator</a>
+    <a href="/help" aria-current="page">How to use</a>
+    <a href="/about">About</a>
+    <a href="/privacy">Privacy</a>
+    <button class="btn small" id="theme-btn" type="button" aria-label="Switch light / dark theme">◐ Theme</button>
+  </nav>
+</header>
+<main class="prose guide">
+  <h1>How to use GradeCalc</h1>
+  <p class="muted">Everything here works without an account. Your marks stay in this browser unless you choose to sign in.</p>
+  <nav class="toc panel" aria-label="On this page">
+    <a href="#start">Getting started</a>
+    <a href="#example">Worked example</a>
+    <a href="#fields">Every field</a>
+    <a href="#files">Files and backups</a>
+    <a href="#accounts">Accounts</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+
+  <h2 id="start">Getting started in 5 steps</h2>
+  <ol class="steps">
+    <li><b>Open the calculator.</b> Go to <a href="/">the calculator</a>. The first time, you see three choices:
+      <b>Set up my first course</b>, <b>Try it with demo data</b> (a made-up student to look around with) and
+      <b>Start with a term</b>.</li>
+    <li><b>Set up a course from your syllabus.</b> Press <b>Set up my first course</b> (later: <b>New course (set up)</b>
+      under Terms). Type the course <b>Title</b>, <b>Code (optional)</b> and <b>Credits</b>, then press <b>Next</b>.</li>
+    <li><b>Copy the weights.</b> Add each part of the grade from the syllabus (for example Assignments 20, Midterm 30,
+      Final exam 50). The line under the list turns green at <b>Weights = 100</b>. Press <b>Next</b> and say how many
+      items each part has (5 assignments, 1 midterm…), then any special rules, then a curve only if you already know it.
+      Check the review and press <b>Create course</b>.</li>
+    <li><b>Type marks as you get them.</b> Click the dash next to an item and type the mark: <code>85</code> (percent),
+      <code>17/20</code> (points) or a letter like <code>B+</code>. Press Enter. Or press <b>+ Mark</b> (top bar on a
+      computer, bottom-right button on a phone) to pick the course and item from a list.</li>
+    <li><b>Read your results.</b> Each course shows its <b>Current average</b>, the grade <b>So far</b> and a
+      <b>Projected</b> grade. Type a target in the <b>Need est. on … to finish with … %</b> line to see what you need on
+      what's left. Your term
+      and cumulative averages and the <b>Graphs</b> update on their own. Download a backup now and then
+      (<b>More</b> → <b>Files</b>).</li>
+  </ol>
+  <p class="note">Grades are calculated, not official. Check your school's own records for your real standing.</p>
+
+  <h2 id="example">Worked example (demo data)</h2>
+  <p>Press <b>Try it with demo data</b> (or <b>Settings</b> → <b>Load demo data</b>, which replaces what you have) and open
+    <b>Fall 2026</b> → <b>DEMO-2300 Data and Chance</b>. It's a made-up course in progress:</p>
+  <div class="table-scroll">
+    <table class="example">
+      <thead><tr><th>Component</th><th>Weight</th><th>Marks so far</th></tr></thead>
+      <tbody>
+        <tr><td>Homework</td><td>25%</td><td>92, 88, —, — (4 items)</td></tr>
+        <tr><td>Tests</td><td>35%</td><td>74, — (2 tests)</td></tr>
+        <tr><td>Final exam</td><td>40%</td><td>— (not written yet)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li><b>Current average</b> counts only what's marked. Homework averages 90% and Tests 74%, and those two parts are
+      60% of the course: (90 × 25 + 74 × 35) ÷ 60 = <b data-calc="average">80.67%</b>, an
+      <b data-calc="letter">A-</b> on the UWindsor scale. This is "how am I doing on what's been graded".</li>
+    <li><b>So far</b> counts every unmarked item as 0: Homework (92 + 88 + 0 + 0) ÷ 4 = 45% of 25, plus Tests
+      (74 + 0) ÷ 2 = 37% of 35, plus 0 of 40 = <b data-calc="so-far">24.20%</b>. This is the grade you'd get if you
+      handed in nothing else. It only goes up.</li>
+    <li><b>What do I need?</b> In the <b>Need est. on … to finish with … %</b> line, type <code>80</code>. On
+      <b>everything left</b> you need
+      <b data-calc="need-all">79.7%</b> on average on the 2 homeworks, the second test and the final: they're 70 points of
+      weight (12.5 + 17.5 + 40), and (80 − 24.2) ÷ 70 = 79.7%. Pick <b>Final exam</b> instead of <b>everything left</b> and it says
+      <b data-calc="need-final">79.0%</b> on the final, if your other unmarked work goes like your current average (90%
+      homework, 74% tests): that's 22.5 + 25.9 = 48.4 points, and (80 − 48.4) ÷ 40 = 79.0%.</li>
+    <li>Both "need" numbers and <b>Projected</b> are marked <b>est.</b>: they're projections, never saved as marks.</li>
+  </ul>
+
+  <h2 id="fields">Every field explained</h2>
+  <p>Most fields are in <b>Edit structure</b> (top bar; <b>Edit</b> on a phone). Press it again (<b>Done editing</b>)
+    to go back to typing marks.</p>
+
+  <h3 id="f-wizard">New course setup (the wizard)</h3>
+  <dl class="fields">
+    <dt>New term name</dt><dd>Only when you have no term yet, or pick <b>+ New term…</b>. "Fall 2026" style names fill the
+      season and year for you.</dd>
+    <dt>Title · Code (optional) · Term · Credits</dt><dd>The course name, its code (any school's format, up to 20
+      characters), which term it's in, and its credits (a 6-credit course counts twice as much as a 3-credit one).</dd>
+    <dt>Copy the structure of another course (optional)</dt><dd>Starts from a course you already have: its components,
+      weights, items, rules and curve, never its marks.</dd>
+    <dt>Components · bonus · + Component · ×</dt><dd>Name and weight of each part of the grade, as in the syllabus. Tick
+      <b>bonus</b> for marks on top of 100. <b>+ Component</b> adds a row; <b>×</b> removes one. The live line shows the
+      total.</dd>
+    <dt>Items · Each out of · Drop lowest · Item weights</dt><dd>How many marks a component has (5 assignments), what each
+      is out of (100 for percent, or 20 for "17/20"), how many of the lowest to drop, and <b>Equal</b> or
+      <b>Custom</b> item weights (e.g. <code>1, 1, 2</code>).</dd>
+    <dt>Final replaces the midterm when the final is higher · Final · Takes the weight of</dt><dd>Pick the final and the
+      component(s) it replaces. The final takes their weight if your final mark is higher.</dd>
+    <dt>Minimum needed on a component · Component · Minimum %</dt><dd>Shows a warning when a component is below a minimum
+      (for example labs ≥ 50%). It never changes the grade.</dd>
+    <dt>Excused items</dt><dd>For each component: <b>Stay here</b>, <b>→</b> another component, or <b>By date (before /
+      after a date)</b>. See <b>Excused items go to</b> below.</dd>
+    <dt>Course curve · Points (±) / Factor / Curved grade %</dt><dd>Only if you already know it: <b>No curve</b>,
+      <b>+ points</b>, <b>× factor</b> or <b>Set grade %</b>, then the number.</dd>
+    <dt>Review · Back · Next · Create course</dt><dd>The last page lists everything. Nothing is saved until you press
+      <b>Create course</b>, and one Undo removes the whole setup.</dd>
+  </dl>
+
+  <h3 id="f-add">Add a term · + Course</h3>
+  <dl class="fields">
+    <dt>Name · Year of study (for year averages)</dt><dd><b>Start with a term</b> or <b>+ Term</b> opens <b>Add a
+      term</b>. Name it like "Fall 2026". Year of study is optional (1–10).</dd>
+    <dt>Title · Code · Credits · Type</dt><dd><b>+ Course</b> on a term (in <b>Edit structure</b>) adds a course by name
+      only. Add its components later in <b>Edit structure</b>. Use <b>New course (set up)</b> to get the wizard instead.</dd>
+  </dl>
+
+  <h3 id="f-term">Term</h3>
+  <dl class="fields">
+    <dt>Name · Season · Year</dt><dd>Any name. Season (Fall, Winter, Spring, Summer) and year are filled in from names
+      like "Winter 2027", or pick them yourself.</dd>
+    <dt>Year of study</dt><dd>Optional, 1–10. Used for the <b>Years of study</b> averages. A term without one counts only in
+      the cumulative average.</dd>
+    <dt>Archived</dt><dd>Folds the term under "Archived terms" and <b>+ Mark</b> skips its courses. It still counts in every
+      average and graph.</dd>
+    <dt>New course (set up) · + Course · Delete term</dt><dd>Add a course with the wizard or by name only. Deleting a term
+      deletes its courses too (restorable from <b>Recently deleted</b> for 30 days).</dd>
+  </dl>
+  <p>Term order is time order: it decides which attempt is the "latest" for repeats and the order on the graphs.</p>
+
+  <h3 id="f-course">Course</h3>
+  <dl class="fields">
+    <dt>Title · Code · Short name</dt><dd>Short name is optional and used where space is tight.</dd>
+    <dt>Credits</dt><dd>0–30. Averages are credit-weighted. Blank counts as 0.</dd>
+    <dt>Type</dt><dd><b>Graded</b> (counts in averages), <b>Pass/fail</b> (credits shown separately, never in averages),
+      <b>Transfer credit</b> (credits only) or <b>Withdrawn</b> (counts nowhere).</dd>
+    <dt>Course curve · Points (±) / Factor / Curved grade %</dt><dd>A curve on the whole course, applied after bonus and
+      before the cap.</dd>
+    <dt>Cap at 100%</dt><dd>The course grade can't go over 100%, even with bonus or a curve.</dd>
+    <dt>Final grade (set)</dt><dd>The official grade once you have it, as a % or a letter (A+ to D-, or F). It replaces
+      the calculated grade in every average. A letter alone counts as the middle of its range and is marked <b>est.</b>
+      Clear the box to go back to the calculated grade.</dd>
+    <dt>Notes</dt><dd>Anything you want to remember (up to 2000 characters).</dd>
+    <dt>Move to term · Move</dt><dd>Moves the course, marks and all, to another term. <b>Undo</b> in the toast moves it
+      back.</dd>
+    <dt>Repeat of an earlier attempt? · Which attempt counts · Not a repeat</dt><dd>Links a retake to the earlier
+      attempt, then picks the default, <b>Best attempt counts</b>, <b>Latest attempt counts</b> or <b>All attempts
+      count</b>. <b>Not a repeat</b> removes the link. The link only appears once you have another graded course to link
+      to.</dd>
+    <dt>Duplicate course… · Save as template · Delete course</dt><dd>See <a href="#faq">FAQ</a> and
+      <a href="#files">Files</a>.</dd>
+    <dt>Mark complete · Reopen</dt><dd>On the course (not in Edit structure). Tags it <b>Complete</b> and takes it off the
+      <b>+ Mark</b> list. It doesn't change any numbers.</dd>
+    <dt>Pass · Fail</dt><dd>On a <b>Pass/fail</b> course: the result. Passed credits are shown next to your credit
+      total.</dd>
+  </dl>
+
+  <h3 id="f-component">Component (Assignments, Midterm, Final…)</h3>
+  <dl class="fields">
+    <dt>Weight %</dt><dd>Its share of the course. The <b>Weights = 100</b> line checks the total. Over 100 counts the extra as
+      bonus. Under 100, <b>So far</b> and <b>Projected</b> are still out of 100 (the missing weight is never earned) while
+      <b>Current average</b> is out of the weight marked. You'll see a warning; nothing is blocked.</dd>
+    <dt>Bonus (on top of 100)</dt><dd>Its marks add to the course grade on top of 100.</dd>
+    <dt>Drop lowest (so far) · Drop lowest (average)</dt><dd>How many of the lowest marks to drop, separately for the
+      <b>So far</b> grade and the <b>Current average</b> (in "so far" an unmarked 0 would otherwise always be the one
+      dropped).</dd>
+    <dt>Combine items</dt><dd><b>Mean</b> (every item equal) or <b>By item weight</b>.</dd>
+    <dt>Projected % (est.)</dt><dd>What you expect on its unmarked items. Used for <b>Projected</b> and "what do I need" on
+      other parts. Never saved as a mark.</dd>
+    <dt>Rule</dt><dd><b>Takes weight of… if higher</b> (e.g. the final replaces the midterm when it's higher) or
+      <b>Minimum warning</b> (with <b>Minimum %</b> and <b>Warning label</b>).</dd>
+    <dt>Excused items go to</dt><dd><b>Stay here</b> (the other items share the weight), <b>→ another component</b>, or
+      <b>By date</b> (<b>Date of</b> a component, <b>Before it →</b>, <b>On/after, or no date →</b>).</dd>
+    <dt>Split into parts · Share of group · + Part · Delete part</dt><dd>Turns a component into a group (e.g. Labs =
+      reports + quizzes). Parts share the group's weight by their share numbers: 2 and 1 = two thirds and one third.
+      A group has its own <b>Weight %</b>, <b>Bonus (on top of 100)</b> and <b>Warn below 50%</b>.</dd>
+    <dt>+ Item · Bulk add / edit · Duplicate · Delete component</dt><dd><b>+ Item</b> adds one item. <b>Duplicate</b>
+      copies the component with its items, no marks, named "(copy)" (a "takes weight of" rule isn't copied). Bulk add /
+      edit: see the <a href="#q-bulk">FAQ</a>.</dd>
+  </dl>
+
+  <h3 id="f-item">Item (one mark)</h3>
+  <dl class="fields">
+    <dt>Mark</dt><dd><code>85</code> or <code>85%</code> (percent), <code>17/20</code> (points; sets "out of"), or a letter
+      <code>A+</code> to <code>F</code> (counts as the middle of the letter's range, marked <b>est.</b>). On an item out
+      of 20, a plain <code>17</code> means 17 points. Blank = not marked yet. <code>0</code> is a real zero.</dd>
+    <dt>Item</dt><dd>The item's name (click it in the marks list to rename).</dd>
+    <dt>Out of</dt><dd>What the item is marked out of. <code>1</code> means a percent mark.</dd>
+    <dt>Item weight</dt><dd>Only with <b>Combine items: By item weight</b>. Blank = 1.</dd>
+    <dt>Counts in</dt><dd><b>Both</b>, <b>So far</b>, <b>Average</b> or <b>Neither</b>.</dd>
+    <dt>Excused</dt><dd>The item doesn't count; its weight goes where the component says.</dd>
+    <dt>Curve</dt><dd>In the item's own points: <code>+2</code>, <code>-1</code>, <code>×1.1</code> or <code>=45</code>
+      (the adjusted mark). Empty = none.</dd>
+    <dt>Proj. %</dt><dd>Your expected mark on this item (a projection).</dd>
+    <dt>Date</dt><dd>Optional, in the marks list. Used by "excused by date" and the graphs.</dd>
+    <dt>×</dt><dd>Deletes the item. One with no mark goes at once (<b>Undo</b> in the toast); one with a mark asks first.
+      Both go to <b>Recently deleted</b>.</dd>
+  </dl>
+
+  <h3 id="f-mark">+ Mark (add a mark)</h3>
+  <dl class="fields">
+    <dt>Course · Item · Name</dt><dd>Pick the course and the item, or <b>+ New item in …</b> (then give it a
+      <b>Name</b>). Only graded courses that aren't complete or archived are listed.</dd>
+    <dt>Points / out of · % or letter</dt><dd>Type <code>17</code> / <code>20</code>, or <code>85</code> or
+      <code>B+</code>. A <b>preview</b> shows how the course, term and cumulative averages change. Press <b>Save</b>.</dd>
+  </dl>
+
+  <h3 id="f-results">Results and projections</h3>
+  <dl class="fields">
+    <dt>Current average</dt><dd>Only marked work counts. "How am I doing so far on what's been graded?"</dd>
+    <dt>So far</dt><dd>Unmarked work counts as 0. The floor: what you'd get if you stopped now.</dd>
+    <dt>Projected (est.)</dt><dd>Unmarked work at your projections (or your current average where you set none).</dd>
+    <dt>Need est. on … to finish with … %</dt><dd>"What do I need?": type a target and pick <b>everything left</b> or one
+      component. It shows the average you need ("not reachable" if even 150% wouldn't do it; "already there" if 0 on the
+      rest still gets you there). Each open item also shows what it needs on its own. A projection: never saved.</dd>
+    <dt>This term (term page)</dt><dd>A graph of each course's so far, current average and projected grade, with
+      <b>Need est. on the final to finish each course with … %</b>. The target is a projection too.</dd>
+    <dt>Graphs</dt><dd><b>All course grades</b>, <b>Courses by term</b> and <b>Cumulative average</b> (as a <b>Line</b>,
+      or candles by <b>Year</b>, <b>Semester</b> or <b>Class</b>). Each graph has a <b>Table</b> view.</dd>
+    <dt>preview</dt><dd>In <b>+ Mark</b>, bulk edit and delete warnings: how the course, term and cumulative averages would
+      change. Never saved.</dd>
+  </dl>
+
+  <h3 id="f-settings">Settings (⚙)</h3>
+  <dl class="fields">
+    <dt>Grade scale (letters and GPA)</dt><dd><b>UWindsor (percentage, with letter)</b>: the default; your grade is a
+      percent with the letter beside it. <b>UWindsor 13-point (courses before Fall 2013)</b>.
+      <b>Percentage → 4.0 (generic)</b> and <b>Percentage → 12-point (generic)</b>: common scales, not official anywhere.
+      <b>Custom…</b>: opens <b>Custom scale</b>, one line per letter, "minimum% letter points", e.g.
+      <code>85 A 4.0</code>; points are optional but all-or-none.</dd>
+    <dt>Repeated courses: which attempt counts (default for every repeat)</dt><dd><b>Best attempt counts</b> (UWindsor),
+      <b>Latest attempt counts</b> (many other schools) or <b>All attempts count</b>.</dd>
+    <dt>Credits for a new course</dt><dd>What the wizard and <b>+ Course</b> fill in (default 3, 0–30). Press
+      <b>Save</b>.</dd>
+    <dt>Account… / Sign in… · Export / import… · Load demo data · Reset everything</dt><dd><b>Load demo data</b> replaces
+      everything (it asks first). <b>Reset everything</b> clears your gradebook, History and Recently deleted, but not
+      your theme (clear this site's data in the browser for that). Neither can be undone.</dd>
+  </dl>
+
+  <h3 id="f-tools">Top bar and More</h3>
+  <dl class="fields">
+    <dt>↶ Undo · ↷ Redo</dt><dd>Also Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z (⌘ on a Mac), when you're not typing in a box and no
+      dialog is open. Toasts also offer <b>Undo</b> / <b>Redo</b>. A whole setup, duplicate or bulk edit is one step.
+      Only for this visit: a reload, an import, <b>Load demo data</b>, <b>Reset everything</b> or a change in another
+      tab clears them.</dd>
+    <dt>Graphs</dt><dd>The chart icon in the top bar (or <b>Graphs</b> at the top of the Overview).</dd>
+    <dt>Save note</dt><dd>In the top bar: where your marks are, e.g. "Saved in this browser". Signed in, it also says
+      when something isn't synced yet (see <a href="#accounts">Accounts</a>).</dd>
+    <dt>Edit structure</dt><dd>Reorder terms, courses, components, parts and items with <b>↑</b> / <b>↓</b> (or drag
+      <b>⠿</b> with a mouse), and all the fields above.</dd>
+    <dt>History · History (all changes)</dt><dd>The course's changes, or your last 1000 changes (under <b>More</b>).</dd>
+    <dt>Recently deleted</dt><dd>Deleted terms, courses, components and items, restorable for 30 days.</dd>
+    <dt>Print</dt><dd>On a course: prints just that course.</dd>
+    <dt>Person icon (Sign in / Account) · ◐</dt><dd>Optional sign-in (see <a href="#accounts">Accounts</a>), and light /
+      dark theme.</dd>
+  </dl>
+
+  <h2 id="files">Files and backups</h2>
+  <p><b>More</b> → <b>Files: Excel, CSV, backup, templates</b> (also <b>Settings</b> → <b>Export / import…</b>, and
+    <b>Import a file</b> on the welcome screen). Files are made and read on your device; nothing is uploaded.</p>
+  <ul>
+    <li><b>Backup (.json)</b>: everything, including History and Recently deleted. The one to keep.</li>
+    <li><b>Excel (.xlsx)</b>: one sheet per kind of row, with your averages beside them, and a "Read me" sheet. Keeps
+      rules and curves, not History or Recently deleted. You can edit it and import it again: keep the <b>Id</b> columns.</li>
+    <li><b>CSV (marks)</b>: one row per mark (term, course, component, item). Loses rules, drop lowest, item weights,
+      curves, excused targets, settings, History and Recently deleted.</li>
+    <li><b>Import</b> → <b>Choose a file…</b> (.xlsx, .csv or .json, up to 5 MB and 20,000 rows). It shows what's in the
+      file. Then <b>Add to my gradebook</b> (its terms go after yours; your settings stay) or <b>Replace my gradebook</b>
+      (a backup brings its settings and History; Excel its settings; CSV uses default settings). With an empty gradebook
+      the button just says <b>Import</b>. <b>Undo</b> in the toast right after puts the previous gradebook back.</li>
+    <li><b>Editing the Excel file</b>: the "Read me" sheet explains it. Keep the <b>Id</b> columns as they are; leave
+      <b>Id</b> blank for a new row. Columns marked "(calculated)" are ignored on import. An old .xls may not import:
+      save it as .xlsx.</li>
+    <li><b>Course templates</b>: <b>Edit structure</b> → <b>Save as template</b> downloads a course's structure with no
+      marks. To use one: <b>Choose a file…</b> → pick it → <b>Into term</b> → <b>Add course</b> (you need a term first).</li>
+  </ul>
+
+  <h2 id="accounts">Accounts (optional, coming soon)</h2>
+  <p>You never need an account. Signing in with Google or Microsoft only adds syncing between your devices.
+    <b>Sign-in is built but not switched on yet on this site</b>: until it is, pressing <b>Continue with Google</b> or
+    <b>Continue with Microsoft</b> says "Sign-in isn’t switched on yet. Everything still works without an account." Once
+    it's on, this is how it works:</p>
+  <ul>
+    <li>Where: the person icon in the top bar, <b>Sign in (optional)</b> on the welcome screen, <b>More</b> → <b>Sign in to
+      sync across devices (optional)</b>, or <b>Settings</b> → <b>Sign in…</b>. Then <b>Continue with Google</b>,
+      <b>Continue with Microsoft</b> or <b>Not now</b>. No password is stored here.</li>
+    <li><b>Save your gradebook to your account?</b> lists what's stored. Press <b>I agree</b> or <b>No thanks, sign
+      out</b>; nothing is saved to the account before you agree.</li>
+    <li>If your account is empty and this browser has a guest gradebook: <b>Save to my account</b> (a copy; the guest one
+      stays here) or <b>Start empty</b>. Later: <b>Account</b> → <b>Add it to my account</b> or <b>Replace my account’s
+      gradebook with it</b> (no Undo after).</li>
+    <li>Changes save about 2 seconds after you make them, and offline too (they're sent when you're back online). The note
+      in the top bar says where things stand: "Saved to your account", "Saving to your account…", "Offline: saved on this
+      device, will sync", "Not synced: changed on another device", "Signed out: changes kept on this device", "Not synced:
+      too big for an account (see Account)" (about 1.5 MB) or "Not synced yet: will try again".</li>
+    <li>Changes from your other device show up when you come back to the tab ("Updated from your other device.").</li>
+    <li><b>Updated on another device —</b> <b>Use that version</b> / <b>Keep mine</b>: see the <a href="#q-conflict">FAQ</a>.
+      <b>Signed out —</b> <b>Sign in again</b>: your sign-in ended (it lasts 30 days); changes stay on this device until you sign in
+      (<b>Remove from this browser</b> throws them away, for a shared computer).</li>
+    <li><b>Account</b>: who you're signed in as and the sync state. <b>Account + gradebook (.json)</b> (your account and
+      gradebook as stored on the server, for keeping, not for Import) or <b>Excel (.xlsx)</b>, <b>Sign out</b>,
+      <b>Delete my account…</b>, <b>Close</b>.</li>
+    <li><b>Sign out</b> syncs first, then shows the guest gradebook again. If it can't sync, it asks <b>Sign out without
+      syncing?</b>: <b>Sign out anyway</b> deletes those changes here, so download a Backup first.</li>
+    <li><b>Unsynced changes from another account</b> (a shared browser): <b>Download them (.json)</b> or <b>Discard
+      them</b>.</li>
+    <li>Details in <a href="/privacy">Privacy</a>.</li>
+  </ul>
+
+  <h2 id="faq">FAQ</h2>
+  <div class="faq-search">
+    <label for="faq-search">Search the FAQ</label>
+    <input id="faq-search" type="search" placeholder="e.g. backup, curve, repeat" autocomplete="off" spellcheck="false">
+    <span class="muted small" id="faq-count" role="status" aria-live="polite"></span>
+  </div>
+  <p class="muted" id="faq-none" hidden>No questions match. Try fewer words, or <a href="mailto:contact@aidanwbrown.com">ask me</a>.</p>
+  <div class="faq" id="faq-list">
+    <details class="faq-item" id="q-storage" data-keywords="data stored where storage localstorage browser device server private">
+      <summary>Where is my data stored?</summary>
+      <p>Without an account: only in this browser on this device (its local storage). Nothing is sent to a server, and
+        nobody else, including the site owner, can see it. With an account (once sign-in is switched on): in Cloudflare's
+        database for this site, plus a copy in your browser. Only you can see it. See <a href="/privacy">Privacy</a>.</p>
+    </details>
+    <details class="faq-item" id="q-backup" data-keywords="backup back up save copy export json lose lost restore keep">
+      <summary>How do I back up my grades?</summary>
+      <p><b>More</b> → <b>Files</b> → <b>Backup (.json)</b>. It holds everything (History and Recently deleted too). Keep it
+        somewhere private. To restore: <b>Files</b> → <b>Choose a file…</b> → pick the backup → <b>Replace my
+        gradebook</b>. Do this now and then: a browser can lose its data.</p>
+    </details>
+    <details class="faq-item" id="q-cleared" data-keywords="cleared lost disappeared gone private incognito browser data cookies missing">
+      <summary>My marks disappeared. What happened?</summary>
+      <p>Clearing your browser's data (cookies and site data), a private / incognito window, or a different browser or
+        device all start from an empty gradebook. Grades in a private window are gone when it closes. If you have a
+        backup, import it (<b>Files</b> → <b>Choose a file…</b> → <b>Replace my gradebook</b>). Deleted items, not lost
+        data? Look in <b>More</b> → <b>Recently deleted</b> (30 days).</p>
+    </details>
+    <details class="faq-item" id="q-sofar" data-keywords="grade so far current average difference zero unmarked projected projection">
+      <summary>What's the difference between "grade so far" and "current average"?</summary>
+      <p><b>Current average</b> counts only what's been marked: how you're doing on graded work. <b>So far</b> counts every
+        unmarked item as 0: what you'd finish with if you handed in nothing else, so it starts low and climbs. Once everything
+        is marked they're the same, unless the weights add up to less than 100 or "drop lowest" differs between them. See the <a href="#example">worked example</a>.</p>
+    </details>
+    <details class="faq-item" id="q-projection" data-keywords="projection projected est estimate need target what do i need final">
+      <summary>What does "est." / projection mean?</summary>
+      <p>A projection is a guess about marks you don't have yet: <b>Projected</b>, the <b>Need … to finish with</b> line, the per-item
+        "need", the graph target and letter-only marks are labelled <b>est.</b> Projections are never saved as marks and
+        never change your real averages.</p>
+    </details>
+    <details class="faq-item" id="q-need" data-keywords="what do i need final exam target pass reach">
+      <summary>How do I see what I need on the final?</summary>
+      <p>Open the course. In the <b>Need est. on … to finish with … %</b> line, type your target (e.g. 70) and pick
+        <b>Final exam</b> instead of <b>everything left</b>. Your other unmarked work counts at your projections (your current average where you set none). "Any mark works" or
+        "already there" means even 0 reaches it; "over 100%" means you'd need more than full marks; "not reachable" means
+        even 150% wouldn't do it.</p>
+    </details>
+    <details class="faq-item" id="q-curve" data-keywords="curve curved bell adjust scaled points factor bonus">
+      <summary>How do curves work?</summary>
+      <p>Two kinds. A <b>course curve</b> (<b>Edit structure</b> → <b>Course curve</b>): <b>+ points</b> adds points to the
+        course grade, <b>× factor</b> multiplies it, <b>Set grade %</b> replaces it. It applies after bonus and before
+        <b>Cap at 100%</b>. An <b>item curve</b> (the <b>Curve</b> box on an item) is in that item's own points:
+        <code>+2</code>, <code>×1.1</code> or <code>=45</code>. Curves are kept in Excel and backups, not in CSV.</p>
+    </details>
+    <details class="faq-item" id="q-repeat" data-keywords="repeat retake repeated course twice best latest attempt policy cumulative">
+      <summary>I retook a course. Which grade counts?</summary>
+      <p>Link the retake to the first attempt: <b>Edit structure</b> → <b>Repeat of an earlier attempt?</b>. By default the
+        <b>best attempt counts</b>, as at the University of Windsor. Many schools count the <b>latest</b> attempt instead:
+        change the default in <b>Settings</b> → "Repeated courses: which attempt counts", or for one course with
+        <b>Which attempt counts</b>. Each attempt stays in its own term; only year and cumulative averages change. The
+        link appears once you have another graded course to link to.</p>
+    </details>
+    <details class="faq-item" id="q-cumulative" data-keywords="cumulative higher lower year average repeat why info">
+      <summary>Why is my cumulative average higher (or lower) than every year average?</summary>
+      <p>With repeats. A year average only chooses among the attempts taken that year, but the cumulative chooses among all
+        of them, so the attempt the repeat setting picks can differ. Press the ⓘ next to <b>Cumulative average</b> for the details.</p>
+    </details>
+    <details class="faq-item" id="q-gpa" data-keywords="gpa scale 4.0 12 point 13 letter grade custom windsor uwindsor">
+      <summary>Which GPA scale should I use?</summary>
+      <p>The one your school uses. The default, <b>UWindsor (percentage, with letter)</b>, follows the University of Windsor's
+        published grading policy: your grade is a percent with a letter beside it. Use <b>UWindsor 13-point</b> for courses
+        before Fall 2013. The 4.0 and 12-point scales are generic, not official anywhere. For another school, use
+        <b>Custom…</b> and copy its table.</p>
+    </details>
+    <details class="faq-item" id="q-weights" data-keywords="weights 100 over under bonus warning total">
+      <summary>My weights don't add up to 100.</summary>
+      <p>That's allowed. <b>Edit structure</b> shows the total (<b>Weights = 100</b>). Over 100 counts the extra as bonus.
+        Under 100, <b>So far</b> and <b>Projected</b> are still out of 100, but <b>Current average</b> is out of the weight
+        marked. Mark real bonus parts with <b>Bonus (on top of 100)</b>.</p>
+    </details>
+    <details class="faq-item" id="q-drop" data-keywords="drop lowest best of quizzes">
+      <summary>How does "drop lowest" work?</summary>
+      <p>Set it on the component in <b>Edit structure</b>. It's separate for <b>So far</b> and <b>Current average</b>
+        because in "so far" an unmarked item counts as 0 and would always be the one dropped.</p>
+    </details>
+    <details class="faq-item" id="q-excused" data-keywords="excused missed sick medical weight moved deferred">
+      <summary>I was excused from an item. Where does its weight go?</summary>
+      <p>Tick <b>Excused</b> on the item. By default the other items in that component share its weight. To move it to
+        another component (e.g. to the final), set <b>Excused items go to</b> on the component.</p>
+    </details>
+    <details class="faq-item" id="q-passfail" data-keywords="pass fail transfer credit withdrawn type average credits">
+      <summary>Do pass/fail, transfer and withdrawn courses count?</summary>
+      <p>Not in averages. Passed pass/fail and transfer credits are shown separately next to your credits; withdrawn courses
+        count nowhere. Set it with <b>Type</b> in <b>Edit structure</b>.</p>
+    </details>
+    <details class="faq-item" id="q-undo" data-keywords="undo redo ctrl z mistake nothing happened">
+      <summary>I pressed Ctrl+Z and nothing happened.</summary>
+      <p>Click outside the text box first (inside a box, the box's own undo runs). Undo only covers changes made since you
+        opened the page; a reload clears it. For older changes use <b>History</b> and <b>Recently deleted</b>.</p>
+    </details>
+    <details class="faq-item" id="q-bulk" data-keywords="bulk add edit paste many marks lines">
+      <summary>Can I enter many marks at once?</summary>
+      <p>Yes: <b>Edit structure</b> → <b>Bulk add / edit</b> on a component. One "Name: mark" per line (85, 85%, 17/20 or
+        B+). A blank mark after ":" clears it. Matching names change marks, new names add items, removed lines delete
+        nothing. <b>+ 5 numbered lines</b> adds empty lines. You see the counts and a preview before <b>Save</b>, and one
+        Undo takes it all back.</p>
+    </details>
+    <details class="faq-item" id="q-duplicate" data-keywords="duplicate copy course next term retake same">
+      <summary>How do I copy a course to next term?</summary>
+      <p><b>Edit structure</b> → <b>Duplicate course…</b> → pick <b>Into term</b>. Tick <b>Copy marks, the final grade and
+        the curve too</b>, or leave it to copy the structure only. Press <b>Duplicate</b>. In the same term the copy's
+        title gets "(copy)". Repeat links aren't copied.</p>
+    </details>
+    <details class="faq-item" id="q-archive" data-keywords="archive archived term hide old gpa">
+      <summary>Does archiving a term remove it from my GPA?</summary>
+      <p>No. Archiving only tidies the list (and <b>+ Mark</b> skips its courses). It still counts in every average and graph.</p>
+    </details>
+    <details class="faq-item" id="q-template" data-keywords="template share classmates syllabus setup without marks">
+      <summary>Can I share my course setup without my marks?</summary>
+      <p>Yes: <b>Edit structure</b> → <b>Save as template</b>. The file has the structure only (components, weights, items,
+        rules), no marks, dates, notes or curves. Your classmate imports it with <b>Files</b> → <b>Choose a file…</b> →
+        <b>Into term</b> → <b>Add course</b> (they need a term first).</p>
+    </details>
+    <details class="faq-item" id="q-move" data-keywords="move another browser computer phone laptop transfer device">
+      <summary>How do I move my grades to another browser or computer?</summary>
+      <p>Download a <b>Backup (.json)</b> here, then on the other device: <b>Files</b> → <b>Choose a file…</b> →
+        <b>Replace my gradebook</b>. Without an account, your phone and laptop keep separate gradebooks.</p>
+    </details>
+    <details class="faq-item" id="q-csv" data-keywords="csv import rules curves disappeared lost excel">
+      <summary>Why did my rules or curves disappear after a CSV import?</summary>
+      <p>A CSV holds only marks. Use the Excel file or the backup to keep rules, drops and curves.</p>
+    </details>
+    <details class="faq-item" id="q-upload" data-keywords="uploaded file upload server excel import private">
+      <summary>Is my file uploaded anywhere?</summary>
+      <p>No. Downloads and imports are made and read by the page on your device.</p>
+    </details>
+    <details class="faq-item" id="q-tabs" data-keywords="two tabs changed in another tab reload not saved">
+      <summary>It says "Changed in another tab — Reload".</summary>
+      <p>Another tab saved first, so your last change wasn't saved (so it can't overwrite that tab's work). Press
+        <b>Reload</b>, then make the change again. Keep one tab open to avoid it.</p>
+    </details>
+    <details class="faq-item" id="q-offline" data-keywords="offline install app home screen pwa no internet">
+      <summary>Does it work offline? Can I install it?</summary>
+      <p>Yes. After one visit, the calculator and these pages open without internet, and your marks are in the browser
+        anyway. To install it, use your browser's <b>Install app</b> or <b>Add to Home Screen</b>. It still only keeps
+        your data on this device.</p>
+    </details>
+    <details class="faq-item" id="q-account" data-keywords="account sign in login google microsoft sync cloud coming soon need">
+      <summary>Do I need an account? When can I sign in?</summary>
+      <p>No account is needed: guest mode does everything. Cloud accounts (sign in with Google or Microsoft to sync your
+        devices) are <b>coming soon</b>; until they're switched on, <b>Continue with Google</b> or <b>Continue with
+        Microsoft</b> says "Sign-in isn’t switched on yet". Your
+        guest gradebook stays in this browser either way, and you can copy it to your account later.</p>
+    </details>
+    <details class="faq-item" id="q-school" data-keywords="school microsoft uwindsor admin approval administrator">
+      <summary>My school Microsoft account asks for an administrator's approval.</summary>
+      <p>Some schools block new apps. Sign in with Google instead, or keep using guest mode.</p>
+    </details>
+    <details class="faq-item" id="q-two" data-keywords="google microsoft different accounts missing marks phone laptop separate">
+      <summary>I signed in with Google on one device and Microsoft on another, and my marks are missing.</summary>
+      <p>They're two separate accounts, even with the same email: accounts are never joined by email. Use the same one on
+        every device.</p>
+    </details>
+    <details class="faq-item" id="q-conflict" data-keywords="updated on another device use that version keep mine conflict sync">
+      <summary>"Updated on another device": which do I pick?</summary>
+      <p><b>Use that version</b> if the other device has your newer work; <b>Keep mine</b> if this one does. Unsure?
+        Download a backup first, pick one, then re-enter the few missing marks.</p>
+    </details>
+    <details class="faq-item" id="q-delete" data-keywords="delete everything remove account reset erase data">
+      <summary>How do I delete everything?</summary>
+      <p>Guest mode: <b>Settings</b> → <b>Reset everything</b>, then clear this site's data in your browser for the theme
+        and view choices. With an account: <b>Account</b> → <b>Delete my account…</b> → <b>Delete my account</b> removes the
+        account, its gradebook and your sign-ins from the server at once, and the account's copy from this browser. It
+        can't be undone. Cloudflare's own recovery copies are gone within 30 days. (<b>Reset everything</b> while signed in
+        empties your account's gradebook but keeps the account.)</p>
+    </details>
+    <details class="faq-item" id="q-copy" data-keywords="copy of my data download export account json gdpr">
+      <summary>How do I get a copy of my data?</summary>
+      <p><b>Files</b> → <b>Backup (.json)</b> (you can import it again). Signed in, also <b>Account</b> →
+        <b>Account + gradebook (.json)</b>: your account details and gradebook as stored on the server, for keeping.</p>
+    </details>
+    <details class="faq-item" id="q-guest" data-keywords="guest gradebook sign in sign out what happens copy account">
+      <summary>What happens to my guest gradebook when I sign in or out?</summary>
+      <p>It stays in this browser, untouched. After signing in you can copy it to your account. Signing out shows it
+        again.</p>
+    </details>
+    <details class="faq-item" id="q-signedout" data-keywords="signed out why session expired sign in again 30 days phone offline internet">
+      <summary>Why does it say "Signed out"? Does my phone work without internet?</summary>
+      <p>A sign-in lasts 30 days. Press <b>Sign in again</b>: nothing on this device is lost. Without internet, your phone
+        shows the last synced copy, and your changes sync when you're back online.</p>
+    </details>
+    <details class="faq-item" id="q-owner" data-keywords="owner admin see my grades privacy who">
+      <summary>Can the site owner see my grades?</summary>
+      <p>No. In guest mode nothing leaves your browser. With an account, the admin page shows only counts (accounts,
+        gradebooks, storage), never anyone's grades or email.</p>
+    </details>
+    <details class="faq-item" id="q-official" data-keywords="official transcript university windsor affiliated accurate">
+      <summary>Is this official?</summary>
+      <p>No. GradeCalc is a calculator. Your school's records are what count. Not affiliated with or endorsed by the
+        University of Windsor.</p>
+    </details>
+  </div>
+  <p>Still stuck? Email <a href="mailto:contact@aidanwbrown.com">contact@aidanwbrown.com</a>.</p>
+</main>
+<footer class="site">
+  <div class="links"><span>© 2026 Aidan Brown</span><a href="https://aidanwbrown.com" target="_blank" rel="noopener">aidanwbrown.com</a><a href="/help">How to use</a><a href="/about">About</a><a href="/privacy">Privacy</a></div>
+  <div class="disclaimer">Not affiliated with or endorsed by the University of Windsor.</div>
+</footer>
+</body>
+</html>

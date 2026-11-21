@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "GradeCalc — free grade calculator",
+  "short_name": "GradeCalc",
+  "description": "Weighted grades, what you need on the final, term averages and GPA. Works offline; without an account your marks stay on your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1a1c1d",
+  "theme_color": "#1a1c1d",
+  "lang": "en",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

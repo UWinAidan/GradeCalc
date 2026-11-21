@@ -1,4 +1,5 @@
 // Shared page chrome: theme toggle and the About page's "Copy" email button. No network.
+import './pwa.js';
 const themeBtn = document.getElementById('theme-btn');
 if (themeBtn) {
   themeBtn.addEventListener('click', () => {

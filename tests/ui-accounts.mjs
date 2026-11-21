@@ -82,6 +82,15 @@ export async function accountChecks({ browser, check, env, base }) {
       check(`${tag}: guest mode makes no /api or /auth requests`, apiCalls.length === 0, apiCalls.join(' '));
       check(`${tag}: top bar has a Sign in button, no sideways scroll`, (await page.getAttribute('#account-btn', 'aria-label')) === 'Sign in' && (await overflow()) <= 0);
 
+      // Everything below runs with the service worker in charge of the page, as for real visitors (it leaves /auth/* and
+      // /api/* to the network, so the route above still answers /auth/login).
+      const swOn = await page.evaluate(async () => {
+        await navigator.serviceWorker.ready;
+        for (let i = 0; i < 50 && !navigator.serviceWorker.controller; i++) await new Promise((r) => setTimeout(r, 100));
+        return !!navigator.serviceWorker.controller;
+      });
+      check(`${tag}: service worker controls the page during the account flows`, swOn);
+
       // Sign in → consent.
       await page.click('#account-btn');
       check(`${tag}: sign-in dialog offers Google and Microsoft`, await page.isVisible('#signin-google') && await page.isVisible('#signin-microsoft'));
@@ -246,6 +255,20 @@ export async function accountChecks({ browser, check, env, base }) {
       await page.waitForSelector('.toast');
       check(`${tag}: Microsoft admin approval → "use Google" message`, (await value('#toasts')).includes('administrator’s approval') && (await value('#toasts')).includes('Google'));
       P.deny = false;
+
+      // Shared computer: after sign-in, sync, sign-out and account deletion the service worker's cache holds only the
+      // site's own files (no /api answer, no /auth callback, no ?signin= page, no account data).
+      const swCache = await page.evaluate(async () => {
+        const out = [];
+        for (const name of await caches.keys()) {
+          const c = await caches.open(name);
+          for (const r of await c.keys()) out.push({ path: new URL(r.url).pathname + new URL(r.url).search, body: await (await c.match(r)).text() });
+        }
+        return out;
+      });
+      const leaked = swCache.filter((e) => /^\/(api|auth)\b|\?/.test(e.path) || e.body.includes(sub) || e.body.includes('example.test'));
+      check(`${tag}: service worker cache holds only site files, no account data`, swCache.length >= 25 && leaked.length === 0,
+        leaked.map((e) => e.path).join(' ') || `${swCache.length} files`);
 
       check(`${tag}: no console / CSP errors`, errors.length === 0, errors.join(' | '));
       check(`${tag}: no requests to other origins`, external.length === 0, external.join(' | '));

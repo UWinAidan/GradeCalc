@@ -14,7 +14,10 @@ its D1 database. GradeCalc starts completely blank. **The GitHub repo is public.
   `js/demo.js` = made-up demo data;
   `js/structure.js` = Edit structure helpers without DOM (reorder, duplicate, bulk edit, average previews; Round 3).
   CSS: `css/tokens.css` (Sage Classic tokens, both themes) + `css/app.css` (calculator)
-  or `css/site.css` (About, Privacy). `site/vendor/` = pinned third-party libraries with licence files (SheetJS CE, Round 4).
+  or `css/site.css` (How to use, About, Privacy). `/help` = How to use (`help.html` + `js/help.js` FAQ search; its
+  worked example is checked against calc.js in `tests/pwa.test.js`). PWA (Round 6): `manifest.webmanifest`, `sw.js`
+  (network-first, caches only the files in its PRECACHE list; a test keeps the list = the site's files; add new files
+  there), `js/pwa.js` registers it, `icons/` from `scripts/make-icons.mjs`. `site/vendor/` = pinned third-party libraries with licence files (SheetJS CE, Round 4).
 - `shared/calc.js` — all grade math (Round 1), used by the page and the tests. `scripts/build.mjs` copies it to
   `site/js/calc.js` (gitignored; wrangler.jsonc `build` runs it before every dev/deploy, ui-check runs it too).
 - `worker/` — Cloudflare Worker: `/api/*` (gradebook sync, account, admin) and `/auth/*` (Google/Microsoft OIDC).
